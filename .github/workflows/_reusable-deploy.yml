@@ -1,0 +1,130 @@
+name: Reusable Deploy Service
+
+on:
+  workflow_call:
+    inputs:
+      service_name:
+        required: true
+        type: string
+        description: 'Service name (e.g., svc-authz)'
+      service_path:
+        required: true
+        type: string
+        description: 'Path to service directory (e.g., apps/svc-authz)'
+      dockerfile_path:
+        required: false
+        type: string
+        default: 'Dockerfile'
+        description: 'Path to Dockerfile relative to service directory'
+      environment:
+        required: false
+        type: string
+        default: 'dev'
+        description: 'Target environment (dev, stage, prod)'
+
+env:
+  REGISTRY_LOCATION: ${{ vars.GCP_REGION }}
+  PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDP }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Configure Docker to use gcloud as a credential helper
+        run: gcloud auth configure-docker ${{ env.REGISTRY_LOCATION }}-docker.pkg.dev
+
+      - name: Extract metadata
+        id: metadata
+        run: |
+          echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "image_tag=sha-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "image_uri=${{ env.REGISTRY_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/services/${{ inputs.service_name }}" >> $GITHUB_OUTPUT
+
+      - name: Build Docker image
+        working-directory: ${{ inputs.service_path }}
+        run: |
+          docker build \
+            --platform linux/amd64 \
+            --file ${{ inputs.dockerfile_path }} \
+            --tag ${{ steps.metadata.outputs.image_uri }}:${{ steps.metadata.outputs.image_tag }} \
+            --tag ${{ steps.metadata.outputs.image_uri }}:latest \
+            ../..
+
+      - name: Push Docker image
+        run: |
+          docker push ${{ steps.metadata.outputs.image_uri }}:${{ steps.metadata.outputs.image_tag }}
+          docker push ${{ steps.metadata.outputs.image_uri }}:latest
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.0"
+
+      - name: Deploy with Terraform
+        working-directory: infra/terraform/environments/${{ inputs.environment }}
+        run: |
+          # Initialize Terraform
+          terraform init
+          
+          # Update image in Terraform
+          export TF_VAR_${inputs.service_name//-/_}_image="${{ steps.metadata.outputs.image_uri }}:${{ steps.metadata.outputs.image_tag }}"
+          
+          # Plan and apply
+          terraform plan -target=module.${{ inputs.service_name//-/_}}
+          terraform apply -auto-approve -target=module.${{ inputs.service_name//-/_}}
+
+      - name: Get service URL
+        id: service_url
+        run: |
+          cd infra/terraform/environments/${{ inputs.environment }}
+          URL=$(terraform output -raw ${{ inputs.service_name//-/_}}_url)
+          echo "url=$URL" >> $GITHUB_OUTPUT
+
+      - name: Verify deployment
+        run: |
+          echo "Service deployed at: ${{ steps.service_url.outputs.url }}"
+          
+          # Wait for service to be ready
+          sleep 30
+          
+          # Health check
+          curl -f "${{ steps.service_url.outputs.url }}/healthz" || exit 1
+          echo "✅ Service is healthy"
+
+      - name: Comment PR with deployment info
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🚀 **${{ inputs.service_name }}** deployed successfully!
+              
+              **Environment:** ${{ inputs.environment }}
+              **Image:** \`${{ steps.metadata.outputs.image_tag }}\`
+              **Service URL:** ${{ steps.service_url.outputs.url }}
+              
+              Health check: ✅ Passing`
+            })

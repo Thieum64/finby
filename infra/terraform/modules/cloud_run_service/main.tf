@@ -1,0 +1,163 @@
+# Cloud Run Service Module
+variable "name" {
+  description = "Service name"
+  type        = string
+}
+
+variable "location" {
+  description = "GCP region"
+  type        = string
+}
+
+variable "project_id" {
+  description = "GCP project ID"
+  type        = string
+}
+
+variable "image" {
+  description = "Container image URL"
+  type        = string
+}
+
+variable "service_account_email" {
+  description = "Service account email for the service"
+  type        = string
+}
+
+variable "env_vars" {
+  description = "Environment variables"
+  type        = map(string)
+  default     = {}
+}
+
+variable "cpu" {
+  description = "CPU allocation"
+  type        = string
+  default     = "1000m"
+}
+
+variable "memory" {
+  description = "Memory allocation"
+  type        = string
+  default     = "512Mi"
+}
+
+variable "min_instances" {
+  description = "Minimum number of instances"
+  type        = number
+  default     = 0
+}
+
+variable "max_instances" {
+  description = "Maximum number of instances"
+  type        = number
+  default     = 10
+}
+
+variable "allow_public_access" {
+  description = "Allow public access to the service"
+  type        = bool
+  default     = false
+}
+
+# Cloud Run Service
+resource "google_cloud_run_v2_service" "service" {
+  name     = var.name
+  location = var.location
+  project  = var.project_id
+
+  template {
+    scaling {
+      min_instance_count = var.min_instances
+      max_instance_count = var.max_instances
+    }
+
+    service_account = var.service_account_email
+
+    containers {
+      image = var.image
+
+      resources {
+        limits = {
+          cpu    = var.cpu
+          memory = var.memory
+        }
+      }
+
+      dynamic "env" {
+        for_each = var.env_vars
+        content {
+          name  = env.key
+          value = env.value
+        }
+      }
+
+      ports {
+        container_port = 8080
+      }
+
+      startup_probe {
+        http_get {
+          path = "/healthz"
+          port = 8080
+        }
+        initial_delay_seconds = 10
+        timeout_seconds       = 3
+        period_seconds        = 10
+        failure_threshold     = 3
+      }
+
+      liveness_probe {
+        http_get {
+          path = "/healthz"
+          port = 8080
+        }
+        initial_delay_seconds = 30
+        timeout_seconds       = 3
+        period_seconds        = 30
+        failure_threshold     = 3
+      }
+    }
+  }
+
+  traffic {
+    percent = 100
+    type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
+  }
+
+  lifecycle {
+    ignore_changes = [
+      template[0].containers[0].image, # Managed by CI/CD
+    ]
+  }
+}
+
+# IAM binding for public access (conditional)
+resource "google_cloud_run_service_iam_binding" "public_access" {
+  count = var.allow_public_access ? 1 : 0
+
+  location = google_cloud_run_v2_service.service.location
+  project  = google_cloud_run_v2_service.service.project
+  service  = google_cloud_run_v2_service.service.name
+
+  role = "roles/run.invoker"
+  members = [
+    "allUsers",
+  ]
+}
+
+# Outputs
+output "service_url" {
+  description = "URL of the Cloud Run service"
+  value       = google_cloud_run_v2_service.service.uri
+}
+
+output "service_name" {
+  description = "Name of the Cloud Run service"
+  value       = google_cloud_run_v2_service.service.name
+}
+
+output "service_id" {
+  description = "ID of the Cloud Run service"
+  value       = google_cloud_run_v2_service.service.id
+}

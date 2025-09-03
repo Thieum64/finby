@@ -1,0 +1,87 @@
+name: Deploy svc-authz
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/svc-authz/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/deploy-svc-authz.yml'
+      - '.github/workflows/_reusable-deploy.yml'
+  
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'apps/svc-authz/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/deploy-svc-authz.yml'
+      - '.github/workflows/_reusable-deploy.yml'
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - stage
+          - prod
+
+jobs:
+  # Lint and test
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm --filter=@hyperush/svc-authz lint
+
+      - name: Test
+        run: pnpm --filter=@hyperush/svc-authz test
+
+      - name: Build
+        run: pnpm --filter=@hyperush/svc-authz build
+
+  # Deploy to dev environment
+  deploy-dev:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/_reusable-deploy.yml
+    with:
+      service_name: 'svc-authz'
+      service_path: 'apps/svc-authz'
+      environment: 'dev'
+    secrets: inherit
+
+  # Deploy to custom environment (manual trigger)
+  deploy-custom:
+    needs: test
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/_reusable-deploy.yml
+    with:
+      service_name: 'svc-authz'
+      service_path: 'apps/svc-authz'
+      environment: ${{ inputs.environment }}
+    secrets: inherit
