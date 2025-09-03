@@ -1,10 +1,5 @@
 # Dev Environment Configuration
-project_id                   = "hyperush-dev"
-region                      = "europe-west1"
-runtime_service_account     = "runtime-sa@hyperush-dev.iam.gserviceaccount.com"
-artifact_registry_location  = "europe-west1"
-registry_name              = "services"
-
-# TODO: M1 - Add additional configuration as needed
-# TODO: M2 - Add Firestore configuration
-# TODO: M2 - Add notification settings
+project_id                = "hyperush-dev"
+region                   = "europe-west1"
+runtime_service_account  = "runtime-sa@hyperush-dev.iam.gserviceaccount.com"
+svc_authz_image         = "europe-west1-docker.pkg.dev/hyperush-dev/services/svc-authz:latest"

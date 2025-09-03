@@ -5,7 +5,7 @@ set -euo pipefail
 PROJECT_ID="hyperush-dev"
 REGION="europe-west1"
 FIRESTORE_LOCATION="eur3"
-BILLING_ID="<ton_billing_id_GCP>"
+BILLING_ID="01A4F8-2E3C5F-9B8D7E"
 
 echo "🚀 Configuration de Google Cloud SDK..."
 
@@ -26,7 +26,7 @@ if ! gcloud projects describe "$PROJECT_ID" &>/dev/null; then
     
     # Link billing account
     echo "💳 Association du compte de facturation..."
-    gcloud billing projects link "$PROJECT_ID" --billing-account="$BILLING_ID"
+    gcloud beta billing projects link "$PROJECT_ID" --billing-account="$BILLING_ID"
 else
     echo "✅ Projet $PROJECT_ID existe déjà"
 fi

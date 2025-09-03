@@ -16,37 +16,6 @@ terraform {
   # }
 }
 
-# Variables
-variable "project_id" {
-  description = "GCP project ID"
-  type        = string
-  default     = "hyperush-dev"
-}
-
-variable "region" {
-  description = "GCP region"
-  type        = string
-  default     = "europe-west1"
-}
-
-variable "runtime_service_account" {
-  description = "Runtime service account email"
-  type        = string
-  default     = "runtime-sa@hyperush-dev.iam.gserviceaccount.com"
-}
-
-variable "artifact_registry_location" {
-  description = "Artifact Registry location"
-  type        = string
-  default     = "europe-west1"
-}
-
-variable "registry_name" {
-  description = "Artifact Registry repository name"
-  type        = string
-  default     = "services"
-}
-
 # Provider configuration
 provider "google" {
   project = var.project_id
@@ -67,8 +36,8 @@ module "svc_authz" {
   project_id            = var.project_id
   service_account_email = var.runtime_service_account
   
-  # Default image (will be updated by CI/CD)
-  image = "${var.artifact_registry_location}-docker.pkg.dev/${var.project_id}/${var.registry_name}/svc-authz:latest"
+  # Image from CI/CD variable
+  image = var.svc_authz_image
   
   # Resource allocation for dev environment
   cpu         = "1000m"
@@ -84,9 +53,6 @@ module "svc_authz" {
     PORT              = "8080"
     LOG_LEVEL         = "info"
     GCP_PROJECT_ID    = var.project_id
-    # TODO: M1 - Add OpenTelemetry configuration
-    # OTEL_SERVICE_NAME    = "svc-authz"
-    # OTEL_SERVICE_VERSION = "0.1.0"
   }
 }
 
@@ -104,8 +70,3 @@ output "project_info" {
     region         = var.region
   }
 }
-
-# TODO: M2 - Add additional services as they are implemented
-# TODO: M2 - Add Firestore configuration
-# TODO: M2 - Add Pub/Sub topics configuration
-# TODO: M2 - Add Secret Manager secrets

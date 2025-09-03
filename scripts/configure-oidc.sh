@@ -4,7 +4,7 @@ set -euo pipefail
 # Configuration
 PROJECT_ID="hyperush-dev"
 PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format="value(projectNumber)")
-GITHUB_REPO="<ton_github_owner>/<ton_repo>"
+GITHUB_REPO="timmsss/hyperush"
 DEPLOY_SA="deploy-sa"
 
 echo "🔗 Configuration de l'OIDC GitHub Actions → GCP..."

@@ -86,18 +86,18 @@ jobs:
           # Initialize Terraform
           terraform init
           
-          # Update image in Terraform
-          export TF_VAR_${inputs.service_name//-/_}_image="${{ steps.metadata.outputs.image_uri }}:${{ steps.metadata.outputs.image_tag }}"
+          # Update image in Terraform via environment variable
+          export TF_VAR_svc_authz_image="${{ steps.metadata.outputs.image_uri }}:${{ steps.metadata.outputs.image_tag }}"
           
           # Plan and apply
-          terraform plan -target=module.${{ inputs.service_name//-/_}}
-          terraform apply -auto-approve -target=module.${{ inputs.service_name//-/_}}
+          terraform plan -target=module.svc_authz
+          terraform apply -auto-approve -target=module.svc_authz
 
       - name: Get service URL
         id: service_url
         run: |
           cd infra/terraform/environments/${{ inputs.environment }}
-          URL=$(terraform output -raw ${{ inputs.service_name//-/_}}_url)
+          URL=$(terraform output -raw svc_authz_url)
           echo "url=$URL" >> $GITHUB_OUTPUT
 
       - name: Verify deployment
