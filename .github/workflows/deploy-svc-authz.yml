@@ -83,6 +83,7 @@ jobs:
       - name: Build and push Docker image
         run: |
           docker build \
+            --no-cache \
             --platform linux/amd64 \
             --file apps/svc-authz/Dockerfile \
             --tag europe-west1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/services/svc-authz:${{ github.sha }} \
