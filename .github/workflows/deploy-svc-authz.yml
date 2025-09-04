@@ -72,12 +72,15 @@ jobs:
         run: gcloud auth configure-docker europe-west1-docker.pkg.dev
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: apps/svc-authz/Dockerfile
-          push: true
-          tags: europe-west1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/services/svc-authz:${{ github.sha }}
+        run: |
+          docker build \
+            --platform linux/amd64 \
+            --file apps/svc-authz/Dockerfile \
+            --tag europe-west1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/services/svc-authz:${{ github.sha }} \
+            --tag europe-west1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/services/svc-authz:latest \
+            .
+          docker push europe-west1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/services/svc-authz:${{ github.sha }}
+          docker push europe-west1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/services/svc-authz:latest
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
