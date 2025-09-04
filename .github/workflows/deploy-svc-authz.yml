@@ -11,21 +11,6 @@ on:
       - main
     paths:
       - 'apps/svc-authz/**'
-      - 'packages/**'
-      - 'pnpm-lock.yaml'
-      - '.github/workflows/deploy-svc-authz.yml'
-      - '.github/workflows/_reusable-deploy.yml'
-  
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'apps/svc-authz/**'
-      - 'packages/**'
-      - 'pnpm-lock.yaml'
-      - '.github/workflows/deploy-svc-authz.yml'
-      - '.github/workflows/_reusable-deploy.yml'
-
   workflow_dispatch:
     inputs:
       environment:
@@ -35,26 +20,23 @@ on:
         type: choice
         options:
           - dev
-          - stage
-          - prod
 
 jobs:
-  # Lint and test
   test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -62,30 +44,62 @@ jobs:
       - name: Lint
         run: pnpm --filter=@hyperush/svc-authz lint
 
-      - name: Test
-        run: pnpm --filter=@hyperush/svc-authz test
-
       - name: Build
         run: pnpm --filter=@hyperush/svc-authz build
 
-  # Deploy to dev environment
-  deploy-dev:
+  deploy:
     needs: test
-    if: github.ref == 'refs/heads/main'
-    uses: lenxxxx/hyperush/.github/workflows/_reusable-deploy.yml@main
-    with:
-      service_name: 'svc-authz'
-      service_path: 'apps/svc-authz'
-      environment: 'dev'
-    secrets: inherit
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: dev
 
-  # Deploy to custom environment (manual trigger)
-  deploy-custom:
-    needs: test
-    if: github.event_name == 'workflow_dispatch'
-    uses: lenxxxx/hyperush/.github/workflows/_reusable-deploy.yml@main
-    with:
-      service_name: 'svc-authz'
-      service_path: 'apps/svc-authz'
-      environment: ${{ inputs.environment }}
-    secrets: inherit
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDP }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker europe-west1-docker.pkg.dev
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/svc-authz/Dockerfile
+          push: true
+          tags: europe-west1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/services/svc-authz:${{ github.sha }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.0"
+
+      - name: Deploy with Terraform
+        working-directory: infra/terraform/environments/dev
+        env:
+          TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
+          TF_VAR_region: ${{ vars.GCP_REGION }}
+          TF_VAR_runtime_service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          TF_VAR_svc_authz_image: europe-west1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/services/svc-authz:${{ github.sha }}
+        run: |
+          terraform init
+          terraform plan -target=module.svc_authz
+          terraform apply -auto-approve -target=module.svc_authz
+
+      - name: Get service URL and health check
+        working-directory: infra/terraform/environments/dev
+        run: |
+          URL=$(terraform output -raw svc_authz_url)
+          echo "Service URL: $URL"
+          sleep 30
+          curl -f "$URL/healthz"
