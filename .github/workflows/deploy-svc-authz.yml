@@ -1,11 +1,43 @@
+name: Deploy svc-authz
+
 permissions:
   id-token: write
   contents: read
   packages: write
-name: Deploy svc-authz
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/svc-authz/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/deploy-svc-authz.yml'
+      - '.github/workflows/_reusable-deploy.yml'
   
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'apps/svc-authz/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/deploy-svc-authz.yml'
+      - '.github/workflows/_reusable-deploy.yml'
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - stage
+          - prod
+
 jobs:
   # Lint and test
   test:
@@ -17,7 +49,9 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'      - name: Install pnpm
+          node-version: '20'
+
+      - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10
@@ -55,15 +89,3 @@ jobs:
       service_path: 'apps/svc-authz'
       environment: ${{ inputs.environment }}
     secrets: inherit
-
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Target environment'
-        required: true
-        default: 'dev'
-        type: choice
-        options:
-          - dev
-          - stage
-          - prod
