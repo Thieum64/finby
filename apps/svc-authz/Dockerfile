@@ -10,8 +10,8 @@ COPY apps/svc-authz/package.json ./package.json
 # Create minimal pnpm-workspace.yaml for this build context
 RUN echo 'packages: []' > pnpm-workspace.yaml
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile
+# Install dependencies  
+RUN pnpm install
 
 FROM base AS builder  
 WORKDIR /app
@@ -37,7 +37,7 @@ COPY --from=builder --chown=service:nodejs /app/apps/svc-authz/dist ./dist
 COPY --from=builder --chown=service:nodejs /app/apps/svc-authz/package.json ./package.json
 
 # Install production dependencies only
-RUN pnpm install --prod --frozen-lockfile
+RUN pnpm install --prod
 
 USER service
 

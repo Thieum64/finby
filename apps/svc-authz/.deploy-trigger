@@ -9,3 +9,4 @@ Jeu  4 sep 2025 20:35:19 CEST - Simplified Dockerfile syntax
 Jeu  4 sep 2025 20:42:58 CEST - Added debug step for CI context
 Jeu  4 sep 2025 20:46:59 CEST - Added no-cache to Docker build
 Jeu  4 sep 2025 20:53:42 CEST - Simplified Dockerfile to avoid workspace dependency
+Jeu  4 sep 2025 21:05:08 CEST - Removed frozen-lockfile from pnpm install
