@@ -71,6 +71,15 @@ jobs:
       - name: Configure Docker
         run: gcloud auth configure-docker europe-west1-docker.pkg.dev
 
+      - name: Debug context files
+        run: |
+          echo "=== Root directory ==="
+          ls -la
+          echo "=== Apps directory ==="
+          ls -la apps/
+          echo "=== svc-authz directory ==="
+          ls -la apps/svc-authz/
+
       - name: Build and push Docker image
         run: |
           docker build \
