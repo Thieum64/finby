@@ -5,38 +5,7 @@ permissions:
 name: Deploy svc-authz
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'apps/svc-authz/**'
-      - 'packages/**'
-      - 'pnpm-lock.yaml'
-      - '.github/workflows/deploy-svc-authz.yml'
-      - '.github/workflows/_reusable-deploy.yml'
   
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'apps/svc-authz/**'
-      - 'packages/**'
-      - 'pnpm-lock.yaml'
-      - '.github/workflows/deploy-svc-authz.yml'
-      - '.github/workflows/_reusable-deploy.yml'
-
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Target environment'
-        required: true
-        default: 'dev'
-        type: choice
-        options:
-          - dev
-          - stage
-          - prod
-
 jobs:
   # Lint and test
   test:
@@ -86,3 +55,15 @@ jobs:
       service_path: 'apps/svc-authz'
       environment: ${{ inputs.environment }}
     secrets: inherit
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - stage
+          - prod
