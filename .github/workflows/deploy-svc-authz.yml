@@ -68,7 +68,7 @@ jobs:
   deploy-dev:
     needs: test
     if: github.ref == 'refs/heads/main'
-    uses: ./.github/workflows/_reusable-deploy.yml
+    uses: lenxxxx/hyperush/.github/workflows/_reusable-deploy.yml@main
     with:
       service_name: 'svc-authz'
       service_path: 'apps/svc-authz'
@@ -79,7 +79,7 @@ jobs:
   deploy-custom:
     needs: test
     if: github.event_name == 'workflow_dispatch'
-    uses: ./.github/workflows/_reusable-deploy.yml
+    uses: lenxxxx/hyperush/.github/workflows/_reusable-deploy.yml@main
     with:
       service_name: 'svc-authz'
       service_path: 'apps/svc-authz'
