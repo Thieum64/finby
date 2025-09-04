@@ -59,7 +59,7 @@ const registerPlugins = async () => {
 };
 
 // Health check endpoints
-server.get('/', async (request, reply) => {
+server.get('/', async (request, _reply) => {
   const reqId = request.headers['x-request-id'];
   
   return {
@@ -72,7 +72,7 @@ server.get('/', async (request, reply) => {
   };
 });
 
-server.get('/healthz', async (request, reply) => {
+server.get('/healthz', async (_request, _reply) => {
   // TODO: M2 - Add health checks: Firestore connection, secrets access
   return {
     status: 'healthy',
