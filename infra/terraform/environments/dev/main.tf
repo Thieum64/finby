@@ -50,7 +50,6 @@ module "svc_authz" {
 
   env_vars = {
     NODE_ENV          = "development"
-    PORT              = "8080"
     LOG_LEVEL         = "info"
     GCP_PROJECT_ID    = var.project_id
   }

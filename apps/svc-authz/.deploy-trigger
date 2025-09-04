@@ -11,3 +11,4 @@ Jeu  4 sep 2025 20:46:59 CEST - Added no-cache to Docker build
 Jeu  4 sep 2025 20:53:42 CEST - Simplified Dockerfile to avoid workspace dependency
 Jeu  4 sep 2025 21:05:08 CEST - Removed frozen-lockfile from pnpm install
 Jeu  4 sep 2025 21:08:16 CEST - Fixed tsup build dependency issue
+Jeu  4 sep 2025 21:18:23 CEST - Removed PORT env var to fix Cloud Run conflict
