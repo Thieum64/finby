@@ -23,7 +23,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY apps/svc-authz ./apps/svc-authz
 
 # Build the service
-RUN cd apps/svc-authz && pnpm build
+RUN cd apps/svc-authz && pnpm install && pnpm build
 
 FROM base AS runtime
 WORKDIR /app
