@@ -4,30 +4,26 @@ RUN corepack enable pnpm
 FROM base AS deps
 WORKDIR /app
 
-# Copy workspace configuration
-COPY package.json pnpm-lock.yaml ./
+# Copy package.json from service directory (simplified approach for Phase 0)
+COPY apps/svc-authz/package.json ./package.json
 
-# Copy service package.json
-COPY apps/svc-authz/package.json ./apps/svc-authz/
+# Create minimal pnpm-workspace.yaml for this build context
+RUN echo 'packages: []' > pnpm-workspace.yaml
 
 # Install dependencies
-RUN pnpm install --frozen-lockfile --filter=@hyperush/svc-authz
+RUN pnpm install --frozen-lockfile
 
 FROM base AS builder  
 WORKDIR /app
 
 # Copy node_modules from deps stage
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/svc-authz/node_modules ./apps/svc-authz/node_modules
-
-# Copy workspace config for build
-COPY package.json pnpm-lock.yaml ./
 
 # Copy service source code
 COPY apps/svc-authz ./apps/svc-authz
 
 # Build the service
-RUN pnpm --filter=@hyperush/svc-authz build
+RUN cd apps/svc-authz && pnpm build
 
 FROM base AS runtime
 WORKDIR /app
