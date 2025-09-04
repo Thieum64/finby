@@ -4,3 +4,4 @@ Jeu  4 sep 2025 15:31:31 CEST - Added ESLint dependencies
 Jeu  4 sep 2025 15:32:44 CEST - Fixed unused parameters for ESLint
 Jeu  4 sep 2025 15:36:53 CEST - Updated workflow to direct deployment
 Jeu  4 sep 2025 15:38:35 CEST - Switched to plain Docker commands
+Jeu  4 sep 2025 20:33:10 CEST - Optimized Dockerfile for CI/CD context
