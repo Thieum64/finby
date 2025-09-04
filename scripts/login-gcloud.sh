@@ -5,7 +5,14 @@ set -euo pipefail
 PROJECT_ID="hyperush-dev"
 REGION="europe-west1"
 FIRESTORE_LOCATION="eur3"
-BILLING_ID="01A4F8-2E3C5F-9B8D7E"
+
+# Check required environment variables
+if [ -z "$BILLING_ID" ]; then
+    echo "❌ Erreur: La variable BILLING_ID doit être définie"
+    echo "   Exemple: export BILLING_ID='XXXXXX-XXXXXX-XXXXXX'"
+    echo "   Trouvez votre billing ID dans: https://console.cloud.google.com/billing"
+    exit 1
+fi
 
 echo "🚀 Configuration de Google Cloud SDK..."
 

@@ -2,4 +2,4 @@
 project_id                = "hyperush-dev"
 region                   = "europe-west1"
 runtime_service_account  = "runtime-sa@hyperush-dev.iam.gserviceaccount.com"
-svc_authz_image         = "europe-west1-docker.pkg.dev/hyperush-dev/services/svc-authz:latest"
+svc_authz_image         = "europe-west1-docker.pkg.dev/<PROJECT_ID>/services/svc-authz:latest"

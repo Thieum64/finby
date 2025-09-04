@@ -4,8 +4,15 @@ set -euo pipefail
 # Configuration
 PROJECT_ID="hyperush-dev"
 PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format="value(projectNumber)")
-GITHUB_REPO="timmsss/hyperush"
 DEPLOY_SA="deploy-sa"
+
+# Check required environment variables
+if [ -z "$GITHUB_REPO" ]; then
+    echo "❌ Erreur: La variable GITHUB_REPO doit être définie"
+    echo "   Exemple: export GITHUB_REPO='owner/repo-name'"
+    echo "   Format: owner/repository (ex: timmsss/hyperush)"
+    exit 1
+fi
 
 echo "🔗 Configuration de l'OIDC GitHub Actions → GCP..."
 
