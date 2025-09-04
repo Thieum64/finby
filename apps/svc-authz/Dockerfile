@@ -10,9 +10,6 @@ COPY package.json pnpm-lock.yaml ./
 # Copy service package.json
 COPY apps/svc-authz/package.json ./apps/svc-authz/
 
-# Copy any shared packages referenced (lib-common if it exists)
-COPY packages/ ./packages/ 2>/dev/null || true
-
 # Install dependencies
 RUN pnpm install --frozen-lockfile --filter=@hyperush/svc-authz
 
@@ -21,16 +18,13 @@ WORKDIR /app
 
 # Copy node_modules from deps stage
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/svc-authz/node_modules ./apps/svc-authz/node_modules 2>/dev/null || true
-
-# Copy service source code
-COPY apps/svc-authz ./apps/svc-authz
+COPY --from=deps /app/apps/svc-authz/node_modules ./apps/svc-authz/node_modules
 
 # Copy workspace config for build
 COPY package.json pnpm-lock.yaml ./
 
-# Copy shared packages (if any)
-COPY packages/ ./packages/ 2>/dev/null || true
+# Copy service source code
+COPY apps/svc-authz ./apps/svc-authz
 
 # Build the service
 RUN pnpm --filter=@hyperush/svc-authz build
