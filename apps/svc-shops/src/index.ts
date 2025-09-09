@@ -4,7 +4,7 @@ import { ulid } from 'ulid';
 import { z } from 'zod';
 
 // Initialize OpenTelemetry first
-initOTel('svc-authz');
+initOTel('svc-shops');
 
 // Environment validation (NOTE: PORT is provided by Cloud Run, never set manually)
 const envSchema = z.object({
@@ -15,9 +15,6 @@ const envSchema = z.object({
 });
 
 const env = envSchema.parse(process.env);
-
-// TODO: M2 - Add Firebase Auth token validation
-// TODO: M2 - Add tenant context middleware
 
 const server = fastify({
   logger: {
@@ -62,7 +59,7 @@ server.get('/', async (request, _reply) => {
   const reqId = request.headers['x-request-id'];
   
   return {
-    service: 'svc-authz',
+    service: 'svc-shops',
     version: '0.1.0',
     time: new Date().toISOString(),
     reqId,
@@ -79,17 +76,6 @@ server.get('/healthz', async (_request, _reply) => {
     },
   };
 });
-
-// v1 API namespace (future endpoints)
-server.register(async function v1Routes(server) {
-  // TODO: M2 - Add /v1/me endpoint (current user info)
-  // TODO: M2 - Add /v1/tenants endpoints
-  // TODO: M3 - Add /v1/invitations endpoints
-  
-  server.get('/ping', async () => {
-    return { message: 'AuthZ service v1 API' };
-  });
-}, { prefix: '/v1' });
 
 // Error handling
 server.setErrorHandler((error, request, reply) => {

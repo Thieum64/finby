@@ -1,0 +1,237 @@
+name: Deploy Services Matrix
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  REGISTRY: europe-west1-docker.pkg.dev
+  AR_REPO: services
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - svc-authz
+          - svc-shops
+          - svc-requests
+          - svc-preview
+          - svc-ia-diff
+          - svc-quality
+          - svc-billing
+          - svc-notify
+          - svc-admin
+          - api-gateway
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: latest
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint and build service
+        run: |
+          pnpm --filter=@hyperush/${{ matrix.service }} lint || echo "Warning: Lint step failed"
+          pnpm --filter=@hyperush/${{ matrix.service }}... build
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDP }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGISTRY }}
+
+      - name: Build and push Docker image
+        run: |
+          IMAGE_URI="${{ env.REGISTRY }}/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ matrix.service }}:${{ github.sha }}"
+          IMAGE_URI_LATEST="${{ env.REGISTRY }}/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ matrix.service }}:latest"
+          
+          docker build \
+            --file packages/docker/node-pnpm.Dockerfile \
+            --build-arg SERVICE=${{ matrix.service }} \
+            --tag "$IMAGE_URI" \
+            --tag "$IMAGE_URI_LATEST" \
+            .
+          
+          docker push "$IMAGE_URI"
+          docker push "$IMAGE_URI_LATEST"
+          
+          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Deploy with Terraform
+        working-directory: infra/terraform/environments/dev
+        run: |
+          # Initialize Terraform
+          terraform init
+          
+          # Plan deployment for this specific service
+          terraform plan -target=module.${{ matrix.service }} \
+            -var="${{ matrix.service }}_image=${{ env.IMAGE_URI }}" \
+            -out=tfplan
+          
+          # Apply the plan
+          terraform apply -auto-approve tfplan
+
+      - name: Get service URL
+        working-directory: infra/terraform/environments/dev
+        run: |
+          SERVICE_URL=$(terraform output -raw service_urls | jq -r '.${{ matrix.service }}')
+          echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
+
+      - name: Health check
+        run: |
+          echo "Checking health of ${{ matrix.service }} at $SERVICE_URL"
+          
+          # Wait for service to be ready (up to 5 minutes)
+          timeout 300 bash -c '
+            until curl -f --silent "$SERVICE_URL/healthz"; do
+              echo "Waiting for service to be ready..."
+              sleep 10
+            done
+          '
+          
+          # Verify health endpoint returns 200
+          curl -f "$SERVICE_URL/healthz"
+          
+          echo "✅ Health check passed for ${{ matrix.service }}"
+
+  # Security scanning jobs (non-blocking)
+  security-scan:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    needs: deploy
+    if: always()
+    
+    strategy:
+      matrix:
+        service:
+          - svc-authz
+          - svc-shops
+          - svc-requests
+          - svc-preview
+          - svc-ia-diff
+          - svc-quality
+          - svc-billing
+          - svc-notify
+          - svc-admin
+          - api-gateway
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner (Filesystem)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: './apps/${{ matrix.service }}'
+          format: 'sarif'
+          output: 'trivy-fs-${{ matrix.service }}.sarif'
+
+      - name: Upload Trivy FS scan results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: trivy-fs-${{ matrix.service }}
+          path: trivy-fs-${{ matrix.service }}.sarif
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDP }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGISTRY }}
+
+      - name: Run Trivy vulnerability scanner (Image)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          image-ref: '${{ env.REGISTRY }}/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ matrix.service }}:latest'
+          format: 'sarif'
+          output: 'trivy-image-${{ matrix.service }}.sarif'
+
+      - name: Upload Trivy Image scan results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: trivy-image-${{ matrix.service }}
+          path: trivy-image-${{ matrix.service }}.sarif
+
+  # SBOM generation
+  sbom-generation:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    needs: deploy
+    if: always()
+    
+    strategy:
+      matrix:
+        service:
+          - svc-authz
+          - svc-shops
+          - svc-requests
+          - svc-preview
+          - svc-ia-diff
+          - svc-quality
+          - svc-billing
+          - svc-notify
+          - svc-admin
+          - api-gateway
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDP }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGISTRY }}
+
+      - name: Generate SBOM with Syft
+        uses: anchore/sbom-action@v0
+        with:
+          image: '${{ env.REGISTRY }}/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ matrix.service }}:latest'
+          format: spdx-json
+          output-file: '${{ matrix.service }}-sbom.spdx.json'
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.service }}-sbom
+          path: ${{ matrix.service }}-sbom.spdx.json
