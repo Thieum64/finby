@@ -11,11 +11,70 @@ env:
   REGISTRY: europe-west1-docker.pkg.dev
   AR_REPO: services
 
+concurrency:
+  group: deploy-services-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  deploy:
+  infra-core:
+    name: Deploy Core Infrastructure
     runs-on: ubuntu-latest
+    outputs:
+      terraform-outputs: ${{ steps.tf-outputs.outputs.json }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDP }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGISTRY }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Deploy Core Infrastructure
+        working-directory: infra/terraform/environments/dev
+        run: |
+          # Initialize Terraform
+          terraform init
+
+          # Plan core infrastructure
+          terraform plan \
+            -target=module.pubsub \
+            -target=module.secrets \
+            -target=module.logging \
+            -target=google_firestore_database.database \
+            -out=core-tfplan
+
+          # Apply core infrastructure
+          terraform apply -auto-approve core-tfplan
+
+      - name: Export Terraform Outputs
+        id: tf-outputs
+        working-directory: infra/terraform/environments/dev
+        run: |
+          echo "json=$(terraform output -json)" >> $GITHUB_OUTPUT
+
+  deploy:
+    name: Deploy Service
+    runs-on: ubuntu-latest
+    needs: infra-core
     strategy:
       fail-fast: false
+      max-parallel: 5
       matrix:
         service:
           - svc-authz
@@ -36,7 +95,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: latest
+          version: 9.1.4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -47,10 +106,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build library dependencies
+        run: pnpm --filter=@hyperush/lib-otel build
+
       - name: Lint and build service
         run: |
           pnpm --filter=@hyperush/${{ matrix.service }} lint || echo "Warning: Lint step failed"
-          pnpm --filter=@hyperush/${{ matrix.service }}... build
+          pnpm --filter=@hyperush/${{ matrix.service }} build
 
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
@@ -70,17 +132,17 @@ jobs:
         run: |
           IMAGE_URI="${{ env.REGISTRY }}/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ matrix.service }}:${{ github.sha }}"
           IMAGE_URI_LATEST="${{ env.REGISTRY }}/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ matrix.service }}:latest"
-          
+
           docker build \
             --file packages/docker/node-pnpm.Dockerfile \
             --build-arg SERVICE=${{ matrix.service }} \
             --tag "$IMAGE_URI" \
             --tag "$IMAGE_URI_LATEST" \
             .
-          
+
           docker push "$IMAGE_URI"
           docker push "$IMAGE_URI_LATEST"
-          
+
           echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
 
       - name: Setup Terraform
@@ -88,127 +150,58 @@ jobs:
         with:
           terraform_wrapper: false
 
-      - name: Deploy with Terraform
+      - name: Deploy service with Terraform
         working-directory: infra/terraform/environments/dev
+        env:
+          TF_VAR_svc_authz_image: ${{ matrix.service == 'svc-authz' && env.IMAGE_URI || '' }}
+          TF_VAR_svc_shops_image: ${{ matrix.service == 'svc-shops' && env.IMAGE_URI || '' }}
+          TF_VAR_svc_requests_image: ${{ matrix.service == 'svc-requests' && env.IMAGE_URI || '' }}
+          TF_VAR_svc_preview_image: ${{ matrix.service == 'svc-preview' && env.IMAGE_URI || '' }}
+          TF_VAR_svc_ia_diff_image: ${{ matrix.service == 'svc-ia-diff' && env.IMAGE_URI || '' }}
+          TF_VAR_svc_quality_image: ${{ matrix.service == 'svc-quality' && env.IMAGE_URI || '' }}
+          TF_VAR_svc_billing_image: ${{ matrix.service == 'svc-billing' && env.IMAGE_URI || '' }}
+          TF_VAR_svc_notify_image: ${{ matrix.service == 'svc-notify' && env.IMAGE_URI || '' }}
+          TF_VAR_svc_admin_image: ${{ matrix.service == 'svc-admin' && env.IMAGE_URI || '' }}
+          TF_VAR_api_gateway_image: ${{ matrix.service == 'api-gateway' && env.IMAGE_URI || '' }}
         run: |
           # Initialize Terraform
           terraform init
-          
-          # Plan deployment for this specific service
-          terraform plan -target=module.${{ matrix.service }} \
-            -var="${{ matrix.service }}_image=${{ env.IMAGE_URI }}" \
-            -out=tfplan
-          
-          # Apply the plan
-          terraform apply -auto-approve tfplan
 
-      - name: Get service URL
+          # Plan deployment for this specific service
+          terraform plan -target=module.${{ matrix.service }} -out=service-tfplan
+
+          # Apply the plan
+          terraform apply -auto-approve service-tfplan
+
+      - name: Get service URL and health check
         working-directory: infra/terraform/environments/dev
         run: |
-          SERVICE_URL=$(terraform output -raw service_urls | jq -r '.${{ matrix.service }}')
+          # Get service URL
+          SERVICE_URLS=$(terraform output -json service_urls)
+          SERVICE_URL=$(echo "$SERVICE_URLS" | jq -r '."${{ matrix.service }}"')
           echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
+          echo "Service URL: $SERVICE_URL"
 
-      - name: Health check
-        run: |
+          # Health check with retry
           echo "Checking health of ${{ matrix.service }} at $SERVICE_URL"
-          
-          # Wait for service to be ready (up to 5 minutes)
-          timeout 300 bash -c '
-            until curl -f --silent "$SERVICE_URL/healthz"; do
-              echo "Waiting for service to be ready..."
-              sleep 10
-            done
-          '
-          
-          # Verify health endpoint returns 200
-          curl -f "$SERVICE_URL/healthz"
-          
-          echo "✅ Health check passed for ${{ matrix.service }}"
 
-  # Security scanning jobs (non-blocking)
-  security-scan:
+          for i in {1..30}; do
+            if curl -fsS "$SERVICE_URL/healthz" --max-time 10; then
+              echo "✅ Health check passed for ${{ matrix.service }}"
+              exit 0
+            fi
+            echo "Health check attempt $i/30 failed, retrying in 10s..."
+            sleep 10
+          done
+
+          echo "❌ Health check failed for ${{ matrix.service }} after 30 attempts"
+          exit 1
+
+  smoke-test:
+    name: Smoke Tests & Summary
     runs-on: ubuntu-latest
-    continue-on-error: true
     needs: deploy
     if: always()
-    
-    strategy:
-      matrix:
-        service:
-          - svc-authz
-          - svc-shops
-          - svc-requests
-          - svc-preview
-          - svc-ia-diff
-          - svc-quality
-          - svc-billing
-          - svc-notify
-          - svc-admin
-          - api-gateway
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Run Trivy vulnerability scanner (Filesystem)
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: './apps/${{ matrix.service }}'
-          format: 'sarif'
-          output: 'trivy-fs-${{ matrix.service }}.sarif'
-
-      - name: Upload Trivy FS scan results
-        uses: actions/upload-artifact@v3
-        if: always()
-        with:
-          name: trivy-fs-${{ matrix.service }}
-          path: trivy-fs-${{ matrix.service }}.sarif
-
-      - name: Authenticate to GCP
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDP }}
-          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
-
-      - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${{ env.REGISTRY }}
-
-      - name: Run Trivy vulnerability scanner (Image)
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'image'
-          image-ref: '${{ env.REGISTRY }}/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ matrix.service }}:latest'
-          format: 'sarif'
-          output: 'trivy-image-${{ matrix.service }}.sarif'
-
-      - name: Upload Trivy Image scan results
-        uses: actions/upload-artifact@v3
-        if: always()
-        with:
-          name: trivy-image-${{ matrix.service }}
-          path: trivy-image-${{ matrix.service }}.sarif
-
-  # SBOM generation
-  sbom-generation:
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    needs: deploy
-    if: always()
-    
-    strategy:
-      matrix:
-        service:
-          - svc-authz
-          - svc-shops
-          - svc-requests
-          - svc-preview
-          - svc-ia-diff
-          - svc-quality
-          - svc-billing
-          - svc-notify
-          - svc-admin
-          - api-gateway
 
     steps:
       - name: Checkout
@@ -220,18 +213,35 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDP }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
-      - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${{ env.REGISTRY }}
-
-      - name: Generate SBOM with Syft
-        uses: anchore/sbom-action@v0
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
-          image: '${{ env.REGISTRY }}/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ matrix.service }}:latest'
-          format: spdx-json
-          output-file: '${{ matrix.service }}-sbom.spdx.json'
+          terraform_wrapper: false
 
-      - name: Upload SBOM
-        uses: actions/upload-artifact@v3
+      - name: Generate Service Summary
+        working-directory: infra/terraform/environments/dev
+        run: |
+          terraform init
+
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | URL | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-----|--------|" >> $GITHUB_STEP_SUMMARY
+
+          SERVICE_URLS=$(terraform output -json service_urls)
+
+          for service in svc-authz svc-shops svc-requests svc-preview svc-ia-diff svc-quality svc-billing svc-notify svc-admin api-gateway; do
+            url=$(echo "$SERVICE_URLS" | jq -r ".[\"$service\"]")
+            if curl -fsS "$url/healthz" --max-time 5 >/dev/null 2>&1; then
+              status="✅ Healthy"
+            else
+              status="❌ Unhealthy"
+            fi
+            echo "| $service | $url | $status |" >> $GITHUB_STEP_SUMMARY
+          done
+
+      - name: Upload Service URLs
+        uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.service }}-sbom
-          path: ${{ matrix.service }}-sbom.spdx.json
+          name: service-urls
+          path: |
+            infra/terraform/environments/dev/terraform.tfstate

@@ -1,0 +1,43 @@
+# Git and version control
+.git
+.gitignore
+.gitattributes
+
+# Dependencies
+node_modules
+**/node_modules
+.pnpm-store
+.turbo
+
+# Build outputs
+dist
+**/dist
+build
+**/build
+coverage
+
+# Development tools
+.husky
+.vscode
+.idea
+.DS_Store
+
+# Environment and secrets
+**/.env
+**/.env.*
+.env.example
+
+# Temporary files
+tmp
+logs
+**/*.log
+
+# Test files
+*.test.*
+**/__tests__
+
+# Documentation
+README.md
+**/README.md
+docs
+*.md

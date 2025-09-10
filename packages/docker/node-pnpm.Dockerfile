@@ -2,8 +2,8 @@
 # Pinned base image for security and reproducibility
 FROM node@sha256:eabac870db94f7342d6c33560d6613f188bbcf4bbe1f4eb47d5e2a08e1a37722 AS base
 
-# Install pnpm via corepack
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Install pnpm via corepack with pinned version
+RUN corepack enable && corepack prepare pnpm@9.1.4 --activate
 
 # Set working directory
 WORKDIR /app
@@ -40,15 +40,15 @@ ARG SERVICE
 RUN test -n "$SERVICE" || (echo "SERVICE build arg is required" && false)
 
 # Create non-root user for security
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+RUN addgroup -g 1001 -S service && \
+    adduser -S service -u 1001
 
 # Copy built application
-COPY --from=build --chown=nodejs:nodejs /app/apps/$SERVICE/dist ./dist
-COPY --from=build --chown=nodejs:nodejs /app/node_modules ./node_modules
+COPY --from=build --chown=service:service /app/apps/$SERVICE/dist ./dist
+COPY --from=build --chown=service:service /app/node_modules ./node_modules
 
 # Switch to non-root user
-USER nodejs
+USER service
 
 # Health check on /healthz endpoint (Cloud Run requirement)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
