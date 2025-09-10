@@ -54,10 +54,9 @@ resource "google_logging_metric" "job_failed_count" {
   }
 
   metric_descriptor {
-    metric_kind = "COUNTER"
+    metric_kind = "CUMULATIVE"
     value_type  = "INT64"
     display_name = "Hyperush Job Failed Count"
-    description = "Count of failed jobs across all Hyperush services"
     
     labels {
       key         = "service"
@@ -92,10 +91,9 @@ resource "google_logging_metric" "request_count" {
   }
 
   metric_descriptor {
-    metric_kind = "COUNTER"
+    metric_kind = "CUMULATIVE"
     value_type  = "INT64"
     display_name = "Hyperush Request Count"
-    description = "Count of HTTP requests across all Hyperush services"
     
     labels {
       key         = "service"
