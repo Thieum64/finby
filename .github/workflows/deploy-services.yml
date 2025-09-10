@@ -31,11 +31,13 @@ jobs:
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDP }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
 
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ vars.GCP_PROJECT_ID }}
+          export_default_credentials: true
 
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.REGISTRY }}
@@ -57,10 +59,11 @@ jobs:
             -target=module.secrets \
             -target=module.logging \
             -target=google_firestore_database.database \
+            -lock-timeout=15m \
             -out=core-tfplan
 
           # Apply core infrastructure
-          terraform apply -auto-approve core-tfplan
+          terraform apply -auto-approve -lock-timeout=15m core-tfplan
 
       - name: Export Terraform Outputs
         id: tf-outputs
@@ -74,7 +77,7 @@ jobs:
     needs: infra-core
     strategy:
       fail-fast: false
-      max-parallel: 5
+      max-parallel: 3
       matrix:
         service:
           - svc-authz
@@ -103,6 +106,14 @@ jobs:
           node-version: '20'
           cache: 'pnpm'
 
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -119,11 +130,13 @@ jobs:
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDP }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
 
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ vars.GCP_PROJECT_ID }}
+          export_default_credentials: true
 
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.REGISTRY }}
@@ -152,26 +165,31 @@ jobs:
 
       - name: Deploy service with Terraform
         working-directory: infra/terraform/environments/dev
-        env:
-          TF_VAR_svc_authz_image: ${{ matrix.service == 'svc-authz' && env.IMAGE_URI || '' }}
-          TF_VAR_svc_shops_image: ${{ matrix.service == 'svc-shops' && env.IMAGE_URI || '' }}
-          TF_VAR_svc_requests_image: ${{ matrix.service == 'svc-requests' && env.IMAGE_URI || '' }}
-          TF_VAR_svc_preview_image: ${{ matrix.service == 'svc-preview' && env.IMAGE_URI || '' }}
-          TF_VAR_svc_ia_diff_image: ${{ matrix.service == 'svc-ia-diff' && env.IMAGE_URI || '' }}
-          TF_VAR_svc_quality_image: ${{ matrix.service == 'svc-quality' && env.IMAGE_URI || '' }}
-          TF_VAR_svc_billing_image: ${{ matrix.service == 'svc-billing' && env.IMAGE_URI || '' }}
-          TF_VAR_svc_notify_image: ${{ matrix.service == 'svc-notify' && env.IMAGE_URI || '' }}
-          TF_VAR_svc_admin_image: ${{ matrix.service == 'svc-admin' && env.IMAGE_URI || '' }}
-          TF_VAR_api_gateway_image: ${{ matrix.service == 'api-gateway' && env.IMAGE_URI || '' }}
         run: |
+          # Set TF variable for current service only
+          case "${{ matrix.service }}" in
+            svc-authz)    export TF_VAR_svc_authz_image="$IMAGE_URI" ;;
+            svc-shops)    export TF_VAR_svc_shops_image="$IMAGE_URI" ;;
+            svc-requests) export TF_VAR_svc_requests_image="$IMAGE_URI" ;;
+            svc-preview)  export TF_VAR_svc_preview_image="$IMAGE_URI" ;;
+            svc-ia-diff)  export TF_VAR_svc_ia_diff_image="$IMAGE_URI" ;;
+            svc-quality)  export TF_VAR_svc_quality_image="$IMAGE_URI" ;;
+            svc-billing)  export TF_VAR_svc_billing_image="$IMAGE_URI" ;;
+            svc-notify)   export TF_VAR_svc_notify_image="$IMAGE_URI" ;;
+            svc-admin)    export TF_VAR_svc_admin_image="$IMAGE_URI" ;;
+            api-gateway)  export TF_VAR_api_gateway_image="$IMAGE_URI" ;;
+          esac
+
+          echo "Deploying ${{ matrix.service }} with image: $IMAGE_URI"
+
           # Initialize Terraform
           terraform init
 
           # Plan deployment for this specific service
-          terraform plan -target=module.${{ matrix.service }} -out=service-tfplan
+          terraform plan -target=module.${{ matrix.service }} -lock-timeout=15m -out=service-tfplan
 
           # Apply the plan
-          terraform apply -auto-approve service-tfplan
+          terraform apply -auto-approve -lock-timeout=15m service-tfplan
 
       - name: Get service URL and health check
         working-directory: infra/terraform/environments/dev
@@ -212,6 +230,13 @@ jobs:
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDP }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          export_default_credentials: true
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
