@@ -59,7 +59,6 @@ jobs:
             -target=module.pubsub \
             -target=module.secrets \
             -target=module.logging \
-            -target=google_firestore_database.database \
             -lock-timeout=5m \
             -out=core-tfplan
           terraform apply -auto-approve -lock-timeout=5m core-tfplan
