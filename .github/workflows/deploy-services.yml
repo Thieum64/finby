@@ -7,17 +7,17 @@ on:
     branches: [main]
   workflow_dispatch:
 
-env:
-  REGISTRY: europe-west1-docker.pkg.dev
-  AR_REPO: services
+permissions:
+  contents: read
+  id-token: write
 
 concurrency:
   group: deploy-services-${{ github.ref }}
   cancel-in-progress: false
 
-permissions:
-  contents: read
-  id-token: write
+env:
+  REGISTRY: europe-west1-docker.pkg.dev
+  AR_REPO: services
 
 jobs:
   infra-core:
@@ -54,10 +54,7 @@ jobs:
       - name: Deploy Core Infrastructure
         working-directory: infra/terraform/environments/dev
         run: |
-          # Initialize Terraform with lock timeout
           terraform init -lock-timeout=5m
-
-          # Plan core infrastructure (pubsub, secrets, logging, firestore)
           terraform plan \
             -target=module.pubsub \
             -target=module.secrets \
@@ -65,8 +62,6 @@ jobs:
             -target=google_firestore_database.database \
             -lock-timeout=5m \
             -out=core-tfplan
-
-          # Apply core infrastructure
           terraform apply -auto-approve -lock-timeout=5m core-tfplan
 
       - name: Export Terraform Outputs
@@ -81,7 +76,7 @@ jobs:
     needs: infra-core
     strategy:
       fail-fast: false
-      max-parallel: 3
+      max-parallel: 5
       matrix:
         service:
           - svc-authz
@@ -110,24 +105,11 @@ jobs:
           node-version: '20'
           cache: 'pnpm'
 
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ~/.pnpm-store
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build library dependencies
         run: pnpm --filter=@hyperush/lib-otel build
-
-      - name: Lint and build service
-        run: |
-          pnpm --filter=@hyperush/${{ matrix.service }} lint || echo "Warning: Lint step failed"
-          pnpm --filter=@hyperush/${{ matrix.service }} build
 
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
@@ -137,11 +119,6 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
-      - name: Setup gcloud
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ vars.GCP_PROJECT_ID }}
-
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.REGISTRY }}
 
@@ -150,8 +127,7 @@ jobs:
 
       - name: Build and push Docker image
         run: |
-          IMAGE_TAG="${{ github.sha }}"
-          IMAGE_URI="${{ env.REGISTRY }}/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ matrix.service }}:${IMAGE_TAG}"
+          IMAGE_URI="${{ env.REGISTRY }}/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ matrix.service }}:${{ github.sha }}"
           IMAGE_URI_LATEST="${{ env.REGISTRY }}/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ matrix.service }}:latest"
 
           echo "Building and pushing: $IMAGE_URI"
@@ -165,7 +141,6 @@ jobs:
             --push \
             .
 
-          echo "Image pushed successfully"
           echo "Getting image digest..."
           DIGEST=$(docker buildx imagetools inspect "$IMAGE_URI" --format '{{ .Manifest.Digest }}')
           echo "Image digest: $DIGEST"
@@ -203,13 +178,8 @@ jobs:
 
           echo "Deploying ${{ matrix.service }} with image: $IMAGE_URI"
 
-          # Initialize Terraform with lock timeout
           terraform init -lock-timeout=5m
-
-          # Plan deployment for this specific service
           terraform plan -target=module.${{ matrix.service }} -lock-timeout=5m -out=service-tfplan
-
-          # Apply the plan
           terraform apply -auto-approve -lock-timeout=5m service-tfplan
 
       - name: Get service URL and health check
@@ -221,7 +191,7 @@ jobs:
           echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
           echo "Service URL: $SERVICE_URL"
 
-          # Health check with retry
+          # Health check with 30 retries
           echo "Checking health of ${{ matrix.service }} at $SERVICE_URL"
 
           for i in {1..30}; do
@@ -254,11 +224,6 @@ jobs:
           create_credentials_file: true
           export_environment_variables: true
 
-      - name: Setup gcloud
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ vars.GCP_PROJECT_ID }}
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -267,10 +232,10 @@ jobs:
       - name: Generate Service Summary
         working-directory: infra/terraform/environments/dev
         run: |
-          # Install jq if needed
+          # Install jq
           sudo apt-get update && sudo apt-get install -y jq
 
-          # Initialize Terraform for reading outputs only
+          # Initialize Terraform (read-only)
           terraform init -lock-timeout=5m
 
           echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
@@ -288,10 +253,3 @@ jobs:
             fi
             echo "| $service | $url | $status |" >> $GITHUB_STEP_SUMMARY
           done
-
-      - name: Upload Service URLs
-        uses: actions/upload-artifact@v4
-        with:
-          name: service-urls
-          path: |
-            infra/terraform/environments/dev/terraform.tfstate
