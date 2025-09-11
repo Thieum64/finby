@@ -67,9 +67,9 @@ jobs:
         id: tf-outputs
         working-directory: infra/terraform/environments/dev
         run: |
-          # Get existing terraform outputs (infrastructure already deployed)
-          terraform init -lock-timeout=5m
-          echo "json=$(terraform output -json)" >> $GITHUB_OUTPUT
+          # Provide minimal outputs since core infrastructure is skipped
+          # NOTE: Service URLs will be determined during individual service deployments
+          echo 'json={"service_urls":{}}' >> $GITHUB_OUTPUT
 
   deploy:
     name: Deploy Service
