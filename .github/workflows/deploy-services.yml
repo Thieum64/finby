@@ -250,14 +250,15 @@ jobs:
           echo "| Service | URL | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|---------|-----|--------|" >> $GITHUB_STEP_SUMMARY
 
-          SERVICE_URLS=$(terraform output -json service_urls)
-
+          # Get service URLs from gcloud (since services are now managed by individual deploy jobs)
           for service in svc-authz svc-shops svc-requests svc-preview svc-ia-diff svc-quality svc-billing svc-notify svc-admin api-gateway; do
-            url=$(echo "$SERVICE_URLS" | jq -r ".[\"$service\"]")
-            if curl -fsS "$url/healthz" --max-time 5 >/dev/null 2>&1; then
+            url=$(gcloud run services describe $service --region=${{ vars.GCP_REGION || 'europe-west1' }} --format="value(status.url)" 2>/dev/null || echo "Not deployed")
+            if [[ "$url" != "Not deployed" ]] && curl -fsS "$url/healthz" --max-time 5 >/dev/null 2>&1; then
               status="✅ Healthy"
-            else
+            elif [[ "$url" != "Not deployed" ]]; then
               status="❌ Unhealthy"
+            else
+              status="⏳ Not deployed"
             fi
             echo "| $service | $url | $status |" >> $GITHUB_STEP_SUMMARY
           done

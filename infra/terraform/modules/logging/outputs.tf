@@ -1,17 +1,11 @@
 output "metrics" {
-  description = "Map of created log-based metrics"
-  value = {
-    job_failed_count = google_logging_metric.job_failed_count.name
-    request_count    = google_logging_metric.request_count.name
-  }
+  description = "Map of created log-based metrics (temporarily disabled)"
+  value = {}
 }
 
 output "log_sink" {
-  description = "Error log sink information"
-  value = {
-    name        = google_logging_project_sink.error_sink.name
-    destination = google_logging_project_sink.error_sink.destination
-  }
+  description = "Error log sink information (temporarily disabled)"
+  value = {}
 }
 
 output "enabled_apis" {
