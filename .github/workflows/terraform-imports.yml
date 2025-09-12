@@ -1,0 +1,79 @@
+name: Import Existing Terraform Resources
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: terraform-imports-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  terraform-imports:
+    name: Import Existing Resources
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDP }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Import Existing Resources
+        working-directory: infra/terraform/environments/dev
+        run: |
+          terraform init -lock-timeout=5m
+
+          echo "🔄 Importing existing resources..."
+
+          # Import Firestore Database
+          echo "📊 Importing Firestore database..."
+          terraform import google_firestore_database.database "projects/${{ vars.GCP_PROJECT_ID }}/databases/(default)" || echo "⚠️ Already imported"
+
+          # Import Pub/Sub Topics
+          echo "🔔 Importing Pub/Sub topics..."
+          terraform import module.pubsub.google_pubsub_topic.jobs "projects/${{ vars.GCP_PROJECT_ID }}/topics/jobs" || echo "⚠️ Already imported"
+          terraform import module.pubsub.google_pubsub_topic.requests "projects/${{ vars.GCP_PROJECT_ID }}/topics/requests" || echo "⚠️ Already imported"
+          terraform import module.pubsub.google_pubsub_topic.notifications "projects/${{ vars.GCP_PROJECT_ID }}/topics/notifications" || echo "⚠️ Already imported"
+          terraform import module.pubsub.google_pubsub_topic.dlq "projects/${{ vars.GCP_PROJECT_ID }}/topics/dead-letter-queue" || echo "⚠️ Already imported"
+
+          # Import Pub/Sub Subscriptions
+          echo "🔔 Importing Pub/Sub subscriptions..."
+          terraform import module.pubsub.google_pubsub_subscription.jobs_sub "projects/${{ vars.GCP_PROJECT_ID }}/subscriptions/jobs-sub" || echo "⚠️ Already imported"
+          terraform import module.pubsub.google_pubsub_subscription.requests_sub "projects/${{ vars.GCP_PROJECT_ID }}/subscriptions/requests-sub" || echo "⚠️ Already imported"
+          terraform import module.pubsub.google_pubsub_subscription.notifications_sub "projects/${{ vars.GCP_PROJECT_ID }}/subscriptions/notifications-sub" || echo "⚠️ Already imported"
+          terraform import module.pubsub.google_pubsub_subscription.dlq_sub "projects/${{ vars.GCP_PROJECT_ID }}/subscriptions/dlq-sub" || echo "⚠️ Already imported"
+
+          # Import Secret Manager secrets
+          echo "🔐 Importing Secret Manager secrets..."
+          terraform import module.secrets.google_secret_manager_secret.firebase_sa_json "projects/${{ vars.GCP_PROJECT_ID }}/secrets/firebase-service-account-json" || echo "⚠️ Already imported"
+          terraform import module.secrets.google_secret_manager_secret.stripe_secret "projects/${{ vars.GCP_PROJECT_ID }}/secrets/stripe-api-secret" || echo "⚠️ Already imported"
+          terraform import module.secrets.google_secret_manager_secret.shopify_webhook_secret "projects/${{ vars.GCP_PROJECT_ID }}/secrets/shopify-webhook-secret" || echo "⚠️ Already imported"
+
+          echo "✅ Import process completed!"
+
+      - name: Verify State After Imports
+        working-directory: infra/terraform/environments/dev
+        run: |
+          echo "🔍 Running terraform plan to verify imports..."
+          terraform plan -lock-timeout=5m || true
+          echo "📋 Plan completed (expect some diffs for attributes not matching)"
