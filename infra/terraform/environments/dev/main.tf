@@ -26,8 +26,21 @@ data "google_project" "project" {
   project_id = var.project_id
 }
 
-# NOTE: Firestore database creation moved to manual step due to potential conflicts
-# Run manually if needed: gcloud firestore databases create --database="(default)" --location=europe-west1 --type=firestore-native
+# Firestore Database
+resource "google_firestore_database" "database" {
+  project                           = var.project_id
+  name                              = "(default)"
+  location_id                       = var.region
+  type                              = "FIRESTORE_NATIVE"
+  concurrency_mode                  = "OPTIMISTIC"
+  app_engine_integration_mode       = "DISABLED"
+  point_in_time_recovery_enablement = "POINT_IN_TIME_RECOVERY_ENABLED"
+  delete_protection_state           = "DELETE_PROTECTION_DISABLED"
+  
+  lifecycle {
+    prevent_destroy = true
+  }
+}
 
 # Infrastructure modules
 module "pubsub" {
