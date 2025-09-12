@@ -26,11 +26,26 @@ data "google_project" "project" {
   project_id = var.project_id
 }
 
-# Firestore Database
-# Note: Database is managed outside Terraform as it already exists in production
-# and contains important data. Manual management avoids accidental destruction.
-data "google_project" "firestore_project" {
-  project_id = var.project_id
+# Firestore Database - Back under IaC with protection
+resource "google_firestore_database" "database" {
+  project                           = var.project_id
+  name                              = "(default)"
+  location_id                       = var.region
+  type                              = "FIRESTORE_NATIVE"
+  concurrency_mode                  = "PESSIMISTIC"
+  app_engine_integration_mode       = "DISABLED"
+  point_in_time_recovery_enablement = "POINT_IN_TIME_RECOVERY_ENABLED"
+  delete_protection_state           = "DELETE_PROTECTION_DISABLED"
+  
+  lifecycle {
+    prevent_destroy = true
+    # Ignore changes to fields that may drift to avoid replacements
+    ignore_changes = [
+      concurrency_mode,
+      app_engine_integration_mode,
+      point_in_time_recovery_enablement
+    ]
+  }
 }
 
 # Infrastructure modules
@@ -80,6 +95,20 @@ output "secrets" {
 output "logging_metrics" {
   description = "Created log-based metrics"
   value       = module.logging.metrics
+}
+
+output "firestore_info" {
+  description = "Firestore database information"
+  value = {
+    name         = google_firestore_database.database.name
+    location_id  = google_firestore_database.database.location_id
+    type         = google_firestore_database.database.type
+  }
+}
+
+output "enabled_apis" {
+  description = "List of enabled APIs"
+  value       = module.logging.enabled_apis
 }
 
 output "project_info" {
