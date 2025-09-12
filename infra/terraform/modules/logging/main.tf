@@ -7,6 +7,24 @@ terraform {
   }
 }
 
+variable "enable_metrics" {
+  description = "Enable log-based metrics creation"
+  type        = bool
+  default     = false
+}
+
+variable "enable_error_sink" {
+  description = "Enable error log sink to storage"
+  type        = bool  
+  default     = false
+}
+
+variable "sink_destination_bucket" {
+  description = "GCS bucket for error log sink (required if enable_error_sink=true)"
+  type        = string
+  default     = ""
+}
+
 # Enable required APIs
 resource "google_project_service" "logging" {
   service = "logging.googleapis.com"
@@ -29,6 +47,75 @@ resource "google_project_service" "cloudtrace" {
   disable_on_destroy         = false
 }
 
-# Log-based metrics and sinks are temporarily disabled 
-# to focus on core infrastructure deployment.
-# These can be re-enabled once services are properly deployed.
+# Log-based metric for job failures (conditional)
+resource "google_logging_metric" "job_failed_count" {
+  count = var.enable_metrics ? 1 : 0
+  
+  name = "hyperush_job_failed_count"
+  
+  filter = <<-EOF
+    resource.type="cloud_run_revision"
+    labels."k8s-pod/serving.knative.dev/service"=~"svc-.*"
+    (
+      jsonPayload.level="ERROR" OR
+      jsonPayload.level="FATAL" OR
+      severity>=ERROR
+    )
+    (
+      jsonPayload.message=~".*job.*failed.*" OR
+      jsonPayload.message=~".*task.*error.*" OR
+      jsonPayload.error=~".*"
+    )
+  EOF
+
+  label_extractors = {
+    service = "EXTRACT(labels.\"k8s-pod/serving.knative.dev/service\")"
+    error_type = "EXTRACT(jsonPayload.error)"
+  }
+
+  depends_on = [google_project_service.logging]
+}
+
+# Log-based metric for request count (conditional)
+resource "google_logging_metric" "request_count" {
+  count = var.enable_metrics ? 1 : 0
+  
+  name = "hyperush_request_count"
+  
+  filter = <<-EOF
+    resource.type="cloud_run_revision"
+    labels."k8s-pod/serving.knative.dev/service"=~"svc-.*"
+    httpRequest.requestMethod!=""
+  EOF
+
+  label_extractors = {
+    service = "EXTRACT(labels.\"k8s-pod/serving.knative.dev/service\")"
+    method = "EXTRACT(httpRequest.requestMethod)"
+    status = "EXTRACT(httpRequest.status)"
+  }
+
+  depends_on = [google_project_service.logging]
+}
+
+# Error log sink (conditional, requires bucket)
+resource "google_logging_project_sink" "error_sink" {
+  count = var.enable_error_sink && var.sink_destination_bucket != "" ? 1 : 0
+  
+  name = "hyperush-error-sink"
+  
+  destination = "storage.googleapis.com/${var.sink_destination_bucket}"
+  
+  filter = <<-EOF
+    resource.type="cloud_run_revision"
+    labels."k8s-pod/serving.knative.dev/service"=~"svc-.*"
+    (
+      severity>=ERROR OR
+      jsonPayload.level="ERROR" OR
+      jsonPayload.level="FATAL"
+    )
+  EOF
+
+  unique_writer_identity = true
+  
+  depends_on = [google_project_service.logging]
+}
