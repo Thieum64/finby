@@ -27,23 +27,29 @@ data "google_project" "project" {
 }
 
 # Firestore Database - Back under IaC with protection
+# Current production state: location_id=eur3, pitr=disabled
 resource "google_firestore_database" "database" {
   project                           = var.project_id
   name                              = "(default)"
-  location_id                       = var.region
+  location_id                       = "eur3"  # Match existing production setting
   type                              = "FIRESTORE_NATIVE"
   concurrency_mode                  = "PESSIMISTIC"
   app_engine_integration_mode       = "DISABLED"
-  point_in_time_recovery_enablement = "POINT_IN_TIME_RECOVERY_ENABLED"
+  point_in_time_recovery_enablement = "POINT_IN_TIME_RECOVERY_DISABLED"  # Match existing
   delete_protection_state           = "DELETE_PROTECTION_DISABLED"
   
   lifecycle {
     prevent_destroy = true
     # Ignore changes to fields that may drift to avoid replacements
     ignore_changes = [
+      location_id,
       concurrency_mode,
       app_engine_integration_mode,
-      point_in_time_recovery_enablement
+      point_in_time_recovery_enablement,
+      earliest_version_time,
+      etag,
+      uid,
+      version_retention_period
     ]
   }
 }
