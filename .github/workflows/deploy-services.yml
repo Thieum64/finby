@@ -55,21 +55,14 @@ jobs:
         working-directory: infra/terraform/environments/dev
         run: |
           terraform init -lock-timeout=5m
-          # NOTE: Skipping problematic modules due to IAM/resource conflicts
-          # - module.pubsub: topics already exist 
-          # - module.logging: missing logging.logMetrics.create permission
-          # - module.secrets: secrets already exist
-          # For Phase 0, we'll skip core infra and proceed with service deployments
-          echo "✅ Skipping core infrastructure deployment due to existing resources and IAM conflicts"
-          echo "Core infrastructure components are already deployed manually"
+          terraform plan -lock-timeout=5m -out=core-tfplan
+          terraform apply -auto-approve -lock-timeout=5m core-tfplan
 
       - name: Export Terraform Outputs
         id: tf-outputs
         working-directory: infra/terraform/environments/dev
         run: |
-          # Provide minimal outputs since core infrastructure is skipped
-          # NOTE: Service URLs will be determined during individual service deployments
-          echo 'json={"service_urls":{}}' >> $GITHUB_OUTPUT
+          echo "json=$(terraform output -json)" >> $GITHUB_OUTPUT
 
   deploy:
     name: Deploy Service
@@ -119,6 +112,15 @@ jobs:
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
           create_credentials_file: true
           export_environment_variables: true
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Lint service
+        run: pnpm --filter=@hyperush/${{ matrix.service }} lint
+        continue-on-error: true
 
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.REGISTRY }}
@@ -224,6 +226,11 @@ jobs:
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
           create_credentials_file: true
           export_environment_variables: true
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
