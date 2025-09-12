@@ -38,42 +38,36 @@ jobs:
         with:
           terraform_wrapper: false
 
-      - name: Import Existing Resources
+      - name: Import Core Infrastructure Resources
         working-directory: infra/terraform/environments/dev
         run: |
           terraform init -lock-timeout=5m
 
-          echo "🔄 Importing existing resources..."
+          echo "🔄 Importing existing core infrastructure resources..."
 
-          # Remove Firestore database from Terraform state (managed manually)
-          echo "📊 Removing Firestore database from Terraform state..."
-          terraform state rm google_firestore_database.database || echo "⚠️ Already removed or not in state"
-
-          # Remove Cloud Run services from state (managed by individual deploy jobs)
-          echo "🚀 Removing Cloud Run services from Terraform state..."
-          for service in svc-authz svc-shops svc-requests svc-preview svc-ia-diff svc-quality svc-billing svc-notify svc-admin api-gateway; do
-            terraform state rm module.${service//-/_}.google_cloud_run_v2_service.service || echo "⚠️ $service already removed or not in state"
-          done
+          # Import Firestore database (if exists and not already in state)
+          echo "📊 Importing Firestore database..."
+          terraform import google_firestore_database.database "projects/${{ vars.GCP_PROJECT_ID }}/databases/(default)" || echo "⚠️ Firestore database already imported or doesn't exist"
 
           # Import Pub/Sub Topics
           echo "🔔 Importing Pub/Sub topics..."
-          terraform import module.pubsub.google_pubsub_topic.jobs "projects/${{ vars.GCP_PROJECT_ID }}/topics/jobs" || echo "⚠️ Already imported"
-          terraform import module.pubsub.google_pubsub_topic.requests "projects/${{ vars.GCP_PROJECT_ID }}/topics/requests" || echo "⚠️ Already imported"
-          terraform import module.pubsub.google_pubsub_topic.notifications "projects/${{ vars.GCP_PROJECT_ID }}/topics/notifications" || echo "⚠️ Already imported"
-          terraform import module.pubsub.google_pubsub_topic.dlq "projects/${{ vars.GCP_PROJECT_ID }}/topics/dead-letter-queue" || echo "⚠️ Already imported"
+          terraform import module.pubsub.google_pubsub_topic.jobs "projects/${{ vars.GCP_PROJECT_ID }}/topics/jobs" || echo "⚠️ Jobs topic already imported"
+          terraform import module.pubsub.google_pubsub_topic.requests "projects/${{ vars.GCP_PROJECT_ID }}/topics/requests" || echo "⚠️ Requests topic already imported"
+          terraform import module.pubsub.google_pubsub_topic.notifications "projects/${{ vars.GCP_PROJECT_ID }}/topics/notifications" || echo "⚠️ Notifications topic already imported"
+          terraform import module.pubsub.google_pubsub_topic.dlq "projects/${{ vars.GCP_PROJECT_ID }}/topics/dead-letter-queue" || echo "⚠️ DLQ topic already imported"
 
           # Import Pub/Sub Subscriptions
           echo "🔔 Importing Pub/Sub subscriptions..."
-          terraform import module.pubsub.google_pubsub_subscription.jobs_sub "projects/${{ vars.GCP_PROJECT_ID }}/subscriptions/jobs-sub" || echo "⚠️ Already imported"
-          terraform import module.pubsub.google_pubsub_subscription.requests_sub "projects/${{ vars.GCP_PROJECT_ID }}/subscriptions/requests-sub" || echo "⚠️ Already imported"
-          terraform import module.pubsub.google_pubsub_subscription.notifications_sub "projects/${{ vars.GCP_PROJECT_ID }}/subscriptions/notifications-sub" || echo "⚠️ Already imported"
-          terraform import module.pubsub.google_pubsub_subscription.dlq_sub "projects/${{ vars.GCP_PROJECT_ID }}/subscriptions/dlq-sub" || echo "⚠️ Already imported"
+          terraform import module.pubsub.google_pubsub_subscription.jobs_sub "projects/${{ vars.GCP_PROJECT_ID }}/subscriptions/jobs-sub" || echo "⚠️ Jobs subscription already imported"
+          terraform import module.pubsub.google_pubsub_subscription.requests_sub "projects/${{ vars.GCP_PROJECT_ID }}/subscriptions/requests-sub" || echo "⚠️ Requests subscription already imported"
+          terraform import module.pubsub.google_pubsub_subscription.notifications_sub "projects/${{ vars.GCP_PROJECT_ID }}/subscriptions/notifications-sub" || echo "⚠️ Notifications subscription already imported"
+          terraform import module.pubsub.google_pubsub_subscription.dlq_sub "projects/${{ vars.GCP_PROJECT_ID }}/subscriptions/dlq-sub" || echo "⚠️ DLQ subscription already imported"
 
           # Import Secret Manager secrets
           echo "🔐 Importing Secret Manager secrets..."
-          terraform import module.secrets.google_secret_manager_secret.firebase_sa_json "projects/${{ vars.GCP_PROJECT_ID }}/secrets/firebase-service-account-json" || echo "⚠️ Already imported"
-          terraform import module.secrets.google_secret_manager_secret.stripe_secret "projects/${{ vars.GCP_PROJECT_ID }}/secrets/stripe-api-secret" || echo "⚠️ Already imported"
-          terraform import module.secrets.google_secret_manager_secret.shopify_webhook_secret "projects/${{ vars.GCP_PROJECT_ID }}/secrets/shopify-webhook-secret" || echo "⚠️ Already imported"
+          terraform import module.secrets.google_secret_manager_secret.firebase_sa_json "projects/${{ vars.GCP_PROJECT_ID }}/secrets/firebase-service-account-json" || echo "⚠️ Firebase secret already imported"
+          terraform import module.secrets.google_secret_manager_secret.stripe_secret "projects/${{ vars.GCP_PROJECT_ID }}/secrets/stripe-api-secret" || echo "⚠️ Stripe secret already imported"
+          terraform import module.secrets.google_secret_manager_secret.shopify_webhook_secret "projects/${{ vars.GCP_PROJECT_ID }}/secrets/shopify-webhook-secret" || echo "⚠️ Shopify secret already imported"
 
           echo "✅ Import process completed!"
 
@@ -82,4 +76,16 @@ jobs:
         run: |
           echo "🔍 Running terraform plan to verify imports..."
           terraform plan -lock-timeout=5m || true
-          echo "📋 Plan completed (expect some diffs for attributes not matching)"
+          echo "📋 Plan completed - check for any remaining diffs"
+
+      - name: Import Summary
+        run: |
+          echo "## 📋 Import Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Core infrastructure import process completed.**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Note:** This workflow is for initial migration/import only." >> $GITHUB_STEP_SUMMARY
+          echo "Regular deployments should use the main deploy-services.yml workflow." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Service imports:** Cloud Run service imports will be handled" >> $GITHUB_STEP_SUMMARY
+          echo "individually by each service terraform stack during deployment." >> $GITHUB_STEP_SUMMARY
