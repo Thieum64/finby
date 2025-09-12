@@ -54,7 +54,7 @@ resource "google_logging_metric" "job_failed_count" {
   }
 
   metric_descriptor {
-    metric_kind = "CUMULATIVE"
+    metric_kind = "GAUGE"
     value_type  = "INT64"
     display_name = "Hyperush Job Failed Count"
     
@@ -91,7 +91,7 @@ resource "google_logging_metric" "request_count" {
   }
 
   metric_descriptor {
-    metric_kind = "CUMULATIVE"
+    metric_kind = "GAUGE"
     value_type  = "INT64"
     display_name = "Hyperush Request Count"
     
@@ -121,7 +121,7 @@ resource "google_logging_metric" "request_count" {
 resource "google_logging_project_sink" "error_sink" {
   name = "hyperush-error-sink"
   
-  destination = "logging.googleapis.com/projects/${var.project_id}/logs/hyperush-errors"
+  destination = "storage.googleapis.com/hyperush-dev-logs"
   
   filter = <<-EOF
     resource.type="cloud_run_revision"

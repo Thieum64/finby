@@ -49,6 +49,12 @@ jobs:
           echo "📊 Removing Firestore database from Terraform state..."
           terraform state rm google_firestore_database.database || echo "⚠️ Already removed or not in state"
 
+          # Remove Cloud Run services from state (managed by individual deploy jobs)
+          echo "🚀 Removing Cloud Run services from Terraform state..."
+          for service in svc-authz svc-shops svc-requests svc-preview svc-ia-diff svc-quality svc-billing svc-notify svc-admin api-gateway; do
+            terraform state rm module.${service//-/_}.google_cloud_run_v2_service.service || echo "⚠️ $service already removed or not in state"
+          done
+
           # Import Pub/Sub Topics
           echo "🔔 Importing Pub/Sub topics..."
           terraform import module.pubsub.google_pubsub_topic.jobs "projects/${{ vars.GCP_PROJECT_ID }}/topics/jobs" || echo "⚠️ Already imported"
