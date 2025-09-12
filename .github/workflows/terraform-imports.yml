@@ -45,9 +45,9 @@ jobs:
 
           echo "🔄 Importing existing resources..."
 
-          # Import Firestore Database
-          echo "📊 Importing Firestore database..."
-          terraform import google_firestore_database.database "projects/${{ vars.GCP_PROJECT_ID }}/databases/(default)" || echo "⚠️ Already imported"
+          # Remove Firestore database from Terraform state (managed manually)
+          echo "📊 Removing Firestore database from Terraform state..."
+          terraform state rm google_firestore_database.database || echo "⚠️ Already removed or not in state"
 
           # Import Pub/Sub Topics
           echo "🔔 Importing Pub/Sub topics..."

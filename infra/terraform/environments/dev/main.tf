@@ -27,19 +27,10 @@ data "google_project" "project" {
 }
 
 # Firestore Database
-resource "google_firestore_database" "database" {
-  project                           = var.project_id
-  name                              = "(default)"
-  location_id                       = var.region
-  type                              = "FIRESTORE_NATIVE"
-  concurrency_mode                  = "PESSIMISTIC"
-  app_engine_integration_mode       = "DISABLED"
-  point_in_time_recovery_enablement = "POINT_IN_TIME_RECOVERY_ENABLED"
-  delete_protection_state           = "DELETE_PROTECTION_DISABLED"
-  
-  lifecycle {
-    prevent_destroy = true
-  }
+# Note: Database is managed outside Terraform as it already exists in production
+# and contains important data. Manual management avoids accidental destruction.
+data "google_project" "firestore_project" {
+  project_id = var.project_id
 }
 
 # Infrastructure modules
