@@ -20,7 +20,8 @@ RUN test -n "$SERVICE" || (echo "SERVICE build arg is required" && false)
 
 # Install dependencies for the specific service only
 COPY packages/ packages/
-COPY apps/$SERVICE/package.json apps/$SERVICE/
+RUN mkdir -p apps/$SERVICE
+COPY apps/$SERVICE/package.json apps/$SERVICE/package.json
 RUN pnpm install --frozen-lockfile --filter=@hyperush/$SERVICE...
 
 # Stage 3: Build
