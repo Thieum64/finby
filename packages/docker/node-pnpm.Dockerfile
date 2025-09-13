@@ -8,8 +8,10 @@ RUN corepack enable && corepack prepare pnpm@9.1.4 --activate
 # Set working directory
 WORKDIR /app
 
-# Copy workspace configuration files
-COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+# Copy all necessary files for workspace setup  
+COPY pnpm-workspace.yaml ./
+COPY package.json ./
+COPY pnpm-lock.yaml ./
 
 # Stage 2: Dependencies
 FROM base AS deps
