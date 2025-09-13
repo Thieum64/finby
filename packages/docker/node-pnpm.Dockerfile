@@ -20,15 +20,11 @@ RUN test -n "$SERVICE" || (echo "SERVICE build arg is required" && false)
 
 # Install dependencies for the specific service only
 COPY packages/ packages/
-RUN mkdir -p apps/$SERVICE
-COPY apps/$SERVICE/package.json apps/$SERVICE/package.json
+COPY apps/ apps/
 RUN pnpm install --frozen-lockfile --filter=@hyperush/$SERVICE...
 
 # Stage 3: Build
 FROM deps AS build
-
-# Copy service source code
-COPY apps/$SERVICE/ apps/$SERVICE/
 
 # Build the service and its dependencies
 RUN pnpm --filter=@hyperush/$SERVICE... build
