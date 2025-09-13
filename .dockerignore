@@ -1,3 +1,12 @@
+# Include workspace configuration
+!package.json
+!pnpm-workspace.yaml
+!pnpm-lock.yaml
+
+# Include app directories and package configs
+!apps/
+!packages/
+
 # Git and version control
 .git
 .gitignore
@@ -9,11 +18,9 @@ node_modules
 .pnpm-store
 .turbo
 
-# Build outputs
+# Build outputs (but not source)
 dist
-**/dist
 build
-**/build
 coverage
 
 # Development tools
@@ -41,3 +48,7 @@ README.md
 **/README.md
 docs
 *.md
+
+# Infrastructure and CI (not needed for builds)
+infra/
+.github/
