@@ -134,24 +134,31 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.REGISTRY }}
 
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Build and Push Container Image
         run: |
           IMAGE_URI="${{ env.REGISTRY }}/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ matrix.service }}:${{ github.sha }}"
           IMAGE_URI_LATEST="${{ env.REGISTRY }}/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ matrix.service }}:latest"
 
-          docker buildx build \
+          # Debug build context
+          echo "📋 Debugging build context..."
+          ls -la
+          echo "Checking workspace files..."
+          ls -la package.json pnpm-workspace.yaml pnpm-lock.yaml || echo "❌ Workspace files not found"
+
+          # Build image locally
+          docker build \
             --platform linux/amd64 \
             --file packages/docker/node-pnpm.Dockerfile \
             --build-arg SERVICE=${{ matrix.service }} \
             --tag "$IMAGE_URI" \
-            --tag "$IMAGE_URI_LATEST" \
-            --push .
+            --tag "$IMAGE_URI_LATEST" .
+
+          # Push both tags
+          docker push "$IMAGE_URI"
+          docker push "$IMAGE_URI_LATEST"
 
           # Get image digest
-          IMAGE_DIGEST=$(docker buildx imagetools inspect "$IMAGE_URI" --format '{{json .}}' | jq -r '.manifest.digest')
+          IMAGE_DIGEST=$(docker inspect "$IMAGE_URI" --format='{{index .RepoDigests 0}}' | cut -d'@' -f2)
 
           # Export to environment
           echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
