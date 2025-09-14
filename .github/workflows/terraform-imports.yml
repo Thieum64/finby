@@ -78,14 +78,53 @@ jobs:
           terraform plan -lock-timeout=5m || true
           echo "📋 Plan completed - check for any remaining diffs"
 
+      - name: Import Service Resources
+        run: |
+          echo "🚀 Importing Cloud Run services..."
+
+          # Array of services to import
+          services=(svc-authz svc-shops svc-requests svc-preview svc-ia-diff svc-quality svc-billing svc-notify svc-admin api-gateway)
+
+          for service in "${services[@]}"; do
+            echo "⚙️ Processing service: $service"
+            
+            # Navigate to service terraform directory
+            cd infra/terraform/services/$service
+            
+            # Initialize terraform
+            terraform init -lock-timeout=5m
+            
+            # Try to import the Cloud Run service
+            terraform import module.service.google_cloud_run_v2_service.service "projects/${{ vars.GCP_PROJECT_ID }}/locations/${{ vars.GCP_REGION || 'europe-west1' }}/services/$service" || echo "⚠️ Service $service already imported or doesn't exist"
+            
+            # Try to import the IAM binding for public access if it exists
+            terraform import module.service.google_cloud_run_service_iam_binding.public_access[0] "${{ vars.GCP_PROJECT_ID }}/locations/${{ vars.GCP_REGION || 'europe-west1' }}/services/$service roles/run.invoker" || echo "⚠️ IAM binding for $service already imported or doesn't exist"
+            
+            # Go back to root
+            cd ../../../../
+          done
+
+      - name: Verify Service Imports
+        run: |
+          echo "🔍 Verifying service imports with terraform plan..."
+
+          services=(svc-authz svc-shops svc-requests svc-preview svc-ia-diff svc-quality svc-billing svc-notify svc-admin api-gateway)
+
+          for service in "${services[@]}"; do
+            echo "📋 Checking $service terraform plan..."
+            cd infra/terraform/services/$service
+            terraform plan -lock-timeout=5m -detailed-exitcode || echo "⚠️ $service has diffs (expected on first run)"
+            cd ../../../../
+          done
+
       - name: Import Summary
         run: |
           echo "## 📋 Import Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "✅ **Core infrastructure import process completed.**" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Service import process completed.**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Services processed:** svc-authz, svc-shops, svc-requests, svc-preview, svc-ia-diff, svc-quality, svc-billing, svc-notify, svc-admin, api-gateway" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Note:** This workflow is for initial migration/import only." >> $GITHUB_STEP_SUMMARY
           echo "Regular deployments should use the main deploy-services.yml workflow." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Service imports:** Cloud Run service imports will be handled" >> $GITHUB_STEP_SUMMARY
-          echo "individually by each service terraform stack during deployment." >> $GITHUB_STEP_SUMMARY

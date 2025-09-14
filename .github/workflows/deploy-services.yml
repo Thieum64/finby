@@ -48,6 +48,9 @@ jobs:
 
       - name: Deploy Core Infrastructure
         working-directory: infra/terraform/environments/dev
+        env:
+          TF_VAR_enable_metrics: false
+          TF_VAR_enable_error_sink: false
         run: |
           terraform init -lock-timeout=5m
           terraform plan -lock-timeout=5m -out=core-tfplan
@@ -111,6 +114,9 @@ jobs:
           if [ -d "packages/lib-otel" ]; then
             pnpm --filter=@hyperush/lib-otel build
           fi
+
+      - name: Build Service
+        run: pnpm --filter=@hyperush/${{ matrix.service }} build
 
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2

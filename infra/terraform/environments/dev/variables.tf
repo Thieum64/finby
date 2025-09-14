@@ -18,6 +18,19 @@ variable "runtime_service_account" {
   default     = "runtime-sa@hyperush-dev.iam.gserviceaccount.com"
 }
 
+# Logging feature flags
+variable "enable_metrics" {
+  description = "Enable log-based metrics creation"
+  type        = bool
+  default     = false
+}
+
+variable "enable_error_sink" {
+  description = "Enable error log sink to storage"
+  type        = bool
+  default     = false
+}
+
 # Container image variables for all services
 variable "svc_authz_image" {
   description = "svc-authz container image URI"

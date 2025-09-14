@@ -72,8 +72,10 @@ module "secrets" {
 module "logging" {
   source = "../../modules/logging"
 
-  project_id  = var.project_id
-  environment = "dev"
+  project_id        = var.project_id
+  environment       = "dev"
+  enable_metrics    = var.enable_metrics
+  enable_error_sink = var.enable_error_sink
 }
 
 # Cloud Run Services are managed by individual deployment jobs
