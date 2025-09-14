@@ -1,54 +1,11 @@
-# Include workspace configuration
+# Exclude everything first
+*
+
+# Then include what we need
 !package.json
 !pnpm-workspace.yaml
 !pnpm-lock.yaml
-
-# Include app directories and package configs
 !apps/
 !packages/
-
-# Git and version control
-.git
-.gitignore
-.gitattributes
-
-# Dependencies
-node_modules
-**/node_modules
-.pnpm-store
-.turbo
-
-# Build outputs (but not source)
-dist
-build
-coverage
-
-# Development tools
-.husky
-.vscode
-.idea
-.DS_Store
-
-# Environment and secrets
-**/.env
-**/.env.*
-.env.example
-
-# Temporary files
-tmp
-logs
-**/*.log
-
-# Test files
-*.test.*
-**/__tests__
-
-# Documentation
-README.md
-**/README.md
-docs
-*.md
-
-# Infrastructure and CI (not needed for builds)
-infra/
-.github/
+!apps/**
+!packages/**
