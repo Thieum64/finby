@@ -251,18 +251,35 @@ jobs:
       - name: Generate Service Summary
         run: |
           echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
-          echo "| Service | URL | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|---------|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | URL | Health Status | Image Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-----|---------------|--------------|" >> $GITHUB_STEP_SUMMARY
 
-          # Get service URLs from gcloud and check health
+          # Get service URLs from gcloud and check health + images
           for service in svc-authz svc-shops svc-requests svc-preview svc-ia-diff svc-quality svc-billing svc-notify svc-admin api-gateway; do
             url=$(gcloud run services describe $service --region=${{ vars.GCP_REGION || 'europe-west1' }} --format="value(status.url)" 2>/dev/null || echo "Not deployed")
+
+            # Check health endpoint
             if [[ "$url" != "Not deployed" ]] && curl -fsS "$url/healthz" --max-time 5 >/dev/null 2>&1; then
-              status="✅ Healthy"
+              health_status="✅ Healthy"
             elif [[ "$url" != "Not deployed" ]]; then
-              status="❌ Unhealthy"
+              health_status="❌ Unhealthy"
             else
-              status="⏳ Not deployed"
+              health_status="⏳ Not deployed"
             fi
-            echo "| $service | $url | $status |" >> $GITHUB_STEP_SUMMARY
+
+            # Check Artifact Registry images
+            latest_exists=$(gcloud artifacts docker images list europe-west1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/services/$service --filter="tags:latest" --format="value(package)" --limit=1 2>/dev/null || echo "")
+            sha_exists=$(gcloud artifacts docker images list europe-west1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/services/$service --filter="tags:${{ github.sha }}" --format="value(package)" --limit=1 2>/dev/null || echo "")
+
+            if [[ -n "$latest_exists" && -n "$sha_exists" ]]; then
+              image_status="✅ Both tags"
+            elif [[ -n "$latest_exists" ]]; then
+              image_status="⚠️ Latest only"
+            elif [[ -n "$sha_exists" ]]; then
+              image_status="⚠️ SHA only"
+            else
+              image_status="❌ No images"
+            fi
+
+            echo "| $service | $url | $health_status | $image_status |" >> $GITHUB_STEP_SUMMARY
           done
