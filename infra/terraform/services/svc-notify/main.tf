@@ -27,7 +27,7 @@ module "service" {
   name                  = "svc-notify"
   location              = var.region
   project_id            = var.project_id
-  service_account_email = var.runtime_service_account
+  runtime_service_account = var.runtime_service_account
   
   image = var.image
   
@@ -36,7 +36,7 @@ module "service" {
   min_instances = 0
   max_instances = 3
 
-  allow_public_access = true
+  enable_public_invoker = true
 
   env_vars = merge(
     {
