@@ -89,7 +89,6 @@ jobs:
         env:
           TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
           TF_VAR_region: ${{ vars.GCP_REGION || 'europe-west1' }}
-          TF_VAR_runtime_service_account: runtime-sa@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
         run: |
           echo "🚀 Importing Cloud Run services..."
 
@@ -99,17 +98,43 @@ jobs:
           for service in "${services[@]}"; do
             echo "⚙️ Processing service: $service"
 
+            # Get current service state from gcloud
+            echo "📊 Retrieving current state for $service..."
+            current=$(gcloud run services describe "$service" --region="${{ vars.GCP_REGION || 'europe-west1' }}" --format=json 2>/dev/null || echo '{}')
+
+            # Export TF_VAR variables from actual state (Cloud Run v2 API)
+            export TF_VAR_image=$(echo "$current" | jq -r '.spec.template.containers[0].image // empty')
+            export TF_VAR_runtime_service_account=$(echo "$current" | jq -r '.spec.template.serviceAccount // empty')
+            export TF_VAR_min_instances=$(echo "$current" | jq -r '.spec.template.scaling.minInstanceCount // empty')
+            export TF_VAR_max_instances=$(echo "$current" | jq -r '.spec.template.scaling.maxInstanceCount // empty')
+            export TF_VAR_container_concurrency=$(echo "$current" | jq -r '.spec.template.containerConcurrency // empty')
+            export TF_VAR_port=$(echo "$current" | jq -r '.spec.template.containers[0].ports[0].containerPort // empty')
+            export TF_VAR_ingress=$(echo "$current" | jq -r '.spec.ingress // empty')
+            export TF_VAR_execution_environment=$(echo "$current" | jq -r '.spec.template.executionEnvironment // empty')
+
+            # Check IAM policy for public invoker
+            has_allUsers=$(gcloud run services get-iam-policy "$service" --region="${{ vars.GCP_REGION || 'europe-west1' }}" --format="json" 2>/dev/null | jq -r '[.bindings[]?|select(.role=="roles/run.invoker")|.members[]]|index("allUsers")')
+            if [ "$has_allUsers" != "null" ] && [ -n "$has_allUsers" ]; then
+              export TF_VAR_enable_public_invoker=true
+            else
+              export TF_VAR_enable_public_invoker=false
+            fi
+
+            echo "📋 Variables exported for $service:"
+            echo "  Image: $TF_VAR_image"
+            echo "  Service Account: $TF_VAR_runtime_service_account"
+            echo "  Min Instances: $TF_VAR_min_instances"
+            echo "  Max Instances: $TF_VAR_max_instances"
+            echo "  Public Invoker: $TF_VAR_enable_public_invoker"
+
             # Navigate to service terraform directory
             cd infra/terraform/services/$service
-
-            # Set service-specific image variable
-            export TF_VAR_image="europe-west1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/services/$service:latest"
 
             # Initialize terraform
             terraform init -lock-timeout=5m
 
             # Try to import the Cloud Run service (exact module address)
-            terraform import module.service.google_cloud_run_v2_service.service "projects/${{ vars.GCP_PROJECT_ID }}/locations/${{ vars.GCP_REGION || 'europe-west1' }}/services/$service" || true
+            terraform import module.service.google_cloud_run_v2_service.service "projects/${{ vars.GCP_PROJECT_ID }}/locations/${{ vars.GCP_REGION || 'europe-west1' }}/services/$service" || echo "⚠️ Service $service already imported or absent"
 
             # Run terraform plan to check if import was successful
             if terraform plan -lock-timeout=5m -detailed-exitcode; then
@@ -126,7 +151,6 @@ jobs:
         env:
           TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
           TF_VAR_region: ${{ vars.GCP_REGION || 'europe-west1' }}
-          TF_VAR_runtime_service_account: runtime-sa@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
         run: |
           echo "🔍 Verifying service imports with terraform plan..."
 
@@ -135,10 +159,29 @@ jobs:
 
           for service in "${services[@]}"; do
             echo "📋 Final verification for $service..."
-            cd infra/terraform/services/$service
 
-            # Set service-specific image variable for final check
-            export TF_VAR_image="europe-west1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/services/$service:latest"
+            # Get current service state from gcloud (same as import step)
+            current=$(gcloud run services describe "$service" --region="${{ vars.GCP_REGION || 'europe-west1' }}" --format=json 2>/dev/null || echo '{}')
+
+            # Export exact same TF_VAR variables as import step (Cloud Run v2 API)
+            export TF_VAR_image=$(echo "$current" | jq -r '.spec.template.containers[0].image // empty')
+            export TF_VAR_runtime_service_account=$(echo "$current" | jq -r '.spec.template.serviceAccount // empty')
+            export TF_VAR_min_instances=$(echo "$current" | jq -r '.spec.template.scaling.minInstanceCount // empty')
+            export TF_VAR_max_instances=$(echo "$current" | jq -r '.spec.template.scaling.maxInstanceCount // empty')
+            export TF_VAR_container_concurrency=$(echo "$current" | jq -r '.spec.template.containerConcurrency // empty')
+            export TF_VAR_port=$(echo "$current" | jq -r '.spec.template.containers[0].ports[0].containerPort // empty')
+            export TF_VAR_ingress=$(echo "$current" | jq -r '.spec.ingress // empty')
+            export TF_VAR_execution_environment=$(echo "$current" | jq -r '.spec.template.executionEnvironment // empty')
+
+            # Check IAM policy for public invoker
+            has_allUsers=$(gcloud run services get-iam-policy "$service" --region="${{ vars.GCP_REGION || 'europe-west1' }}" --format="json" 2>/dev/null | jq -r '[.bindings[]?|select(.role=="roles/run.invoker")|.members[]]|index("allUsers")')
+            if [ "$has_allUsers" != "null" ] && [ -n "$has_allUsers" ]; then
+              export TF_VAR_enable_public_invoker=true
+            else
+              export TF_VAR_enable_public_invoker=false
+            fi
+
+            cd infra/terraform/services/$service
 
             if terraform plan -lock-timeout=5m -detailed-exitcode; then
               echo "✅ $service final plan shows 0 changes - import successful"

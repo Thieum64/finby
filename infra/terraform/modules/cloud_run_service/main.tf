@@ -17,11 +17,13 @@ variable "project_id" {
 variable "image" {
   description = "Container image URL"
   type        = string
+  default     = null
 }
 
-variable "service_account_email" {
+variable "runtime_service_account" {
   description = "Service account email for the service"
   type        = string
+  default     = null
 }
 
 variable "env_vars" {
@@ -33,31 +35,55 @@ variable "env_vars" {
 variable "cpu" {
   description = "CPU allocation"
   type        = string
-  default     = "1000m"
+  default     = null
 }
 
 variable "memory" {
   description = "Memory allocation"
   type        = string
-  default     = "512Mi"
+  default     = null
 }
 
 variable "min_instances" {
   description = "Minimum number of instances"
   type        = number
-  default     = 0
+  default     = null
 }
 
 variable "max_instances" {
   description = "Maximum number of instances"
   type        = number
-  default     = 10
+  default     = null
 }
 
-variable "allow_public_access" {
-  description = "Allow public access to the service"
+variable "container_concurrency" {
+  description = "Maximum number of concurrent requests per instance"
+  type        = number
+  default     = null
+}
+
+variable "port" {
+  description = "Container port"
+  type        = number
+  default     = null
+}
+
+variable "ingress" {
+  description = "Ingress setting"
+  type        = string
+  default     = null
+}
+
+variable "execution_environment" {
+  description = "Execution environment"
+  type        = string
+  default     = null
+}
+
+variable "enable_public_invoker" {
+  description = "Enable public invoker access"
   type        = bool
-  default     = false
+  default     = null
 }
 
 # Cloud Run Service
@@ -66,21 +92,32 @@ resource "google_cloud_run_v2_service" "service" {
   location = var.location
   project  = var.project_id
 
+  ingress = var.ingress
+
   template {
-    scaling {
-      min_instance_count = var.min_instances
-      max_instance_count = var.max_instances
+    dynamic "scaling" {
+      for_each = (var.min_instances != null || var.max_instances != null) ? [1] : []
+      content {
+        min_instance_count = var.min_instances
+        max_instance_count = var.max_instances
+      }
     }
 
-    service_account = var.service_account_email
+    service_account = var.runtime_service_account
+
+    execution_environment = var.execution_environment
+    container_concurrency = var.container_concurrency
 
     containers {
       image = var.image
 
-      resources {
-        limits = {
-          cpu    = var.cpu
-          memory = var.memory
+      dynamic "resources" {
+        for_each = (var.cpu != null || var.memory != null) ? [1] : []
+        content {
+          limits = {
+            cpu    = var.cpu
+            memory = var.memory
+          }
         }
       }
 
@@ -93,13 +130,13 @@ resource "google_cloud_run_v2_service" "service" {
       }
 
       ports {
-        container_port = 8080
+        container_port = var.port != null ? var.port : 8080
       }
 
       startup_probe {
         http_get {
           path = "/healthz"
-          port = 8080
+          port = var.port != null ? var.port : 8080
         }
         initial_delay_seconds = 10
         timeout_seconds       = 3
@@ -110,7 +147,7 @@ resource "google_cloud_run_v2_service" "service" {
       liveness_probe {
         http_get {
           path = "/healthz"
-          port = 8080
+          port = var.port != null ? var.port : 8080
         }
         initial_delay_seconds = 30
         timeout_seconds       = 3
@@ -124,17 +161,11 @@ resource "google_cloud_run_v2_service" "service" {
     percent = 100
     type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
   }
-
-  lifecycle {
-    ignore_changes = [
-      template[0].containers[0].image, # Managed by CI/CD
-    ]
-  }
 }
 
 # IAM binding for public access (conditional)
 resource "google_cloud_run_service_iam_binding" "public_access" {
-  count = var.allow_public_access ? 1 : 0
+  count = var.enable_public_invoker == true ? 1 : 0
 
   location = google_cloud_run_v2_service.service.location
   project  = google_cloud_run_v2_service.service.project
