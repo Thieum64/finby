@@ -1,13 +1,7 @@
-# Exclude unnecessary directories for build context
-node_modules/
 .git/
+node_modules/
 dist/
 coverage/
-.next/
-.nuxt/
-.cache/
-.temp/
-.tmp/
 *.log
 .DS_Store
-.env.local
+.env

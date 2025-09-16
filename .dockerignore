@@ -1,15 +1,7 @@
-# Exclude build artifacts and version control
-.git
-node_modules
-dist
-build
-coverage
-infra/
+.git/
+**/node_modules
+**/dist
+**/build
+**/coverage
 .github/
-
-# Include essential workspace files explicitly
-!package.json
-!pnpm-workspace.yaml
-!pnpm-lock.yaml
-!apps/
-!packages/
+infra/
