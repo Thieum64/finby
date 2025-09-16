@@ -1,11 +1,15 @@
-# Exclude everything first
-*
+# Exclude build artifacts and version control
+.git
+node_modules
+dist
+build
+coverage
+infra/
+.github/
 
-# Then include what we need
+# Include essential workspace files explicitly
 !package.json
 !pnpm-workspace.yaml
 !pnpm-lock.yaml
 !apps/
 !packages/
-!apps/**
-!packages/**

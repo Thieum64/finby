@@ -1,6 +1,7 @@
 # Hyperush Universal Node.js Multi-stage Dockerfile
 # Builder: node@sha256:eabac870db94f7342d6c33560d6613f188bbcf4bbe1f4eb47d5e2a08e1a37722 (node:22)
 # Runtime: node:20-slim@sha256:a22f79e64de59efd3533da2f6eeb8a79c7bc4de5bcede98c5a32ede0a7fb71ac
+
 # Stage 1: Builder - Build the application
 FROM node@sha256:eabac870db94f7342d6c33560d6613f188bbcf4bbe1f4eb47d5e2a08e1a37722 AS builder
 
@@ -30,11 +31,8 @@ RUN pnpm --filter=@hyperush/$SERVICE build
 # Test that the built binary exists
 RUN test -f apps/$SERVICE/dist/index.js || (echo "Build failed: apps/$SERVICE/dist/index.js not found" && false)
 
-# Create minimal runtime structure with clean prod dependencies
-RUN mkdir -p /tmp/service-runtime && \
-    cp -r node_modules /tmp/service-runtime/ && \
-    cp package.json /tmp/service-runtime/ && \
-    cp -r apps/$SERVICE/dist /tmp/service-runtime/
+# Create clean runtime structure using pnpm deploy
+RUN pnpm deploy --filter=@hyperush/$SERVICE --prod /tmp/service-runtime
 
 # Stage 2: Runtime - Minimal production image
 FROM node:20-slim@sha256:a22f79e64de59efd3533da2f6eeb8a79c7bc4de5bcede98c5a32ede0a7fb71ac AS runtime
@@ -49,8 +47,14 @@ WORKDIR /app
 # Declare ARG again for this stage
 ARG SERVICE
 
-# Copy production dependencies and built application from builder stage
+# Copy clean production dependencies from pnpm deploy
 COPY --from=builder --chown=service:service /tmp/service-runtime .
+
+# Copy built application from builder stage
+COPY --from=builder --chown=service:service /app/apps/$SERVICE/dist ./dist
+
+# Test that the built binary exists in runtime
+RUN test -f dist/index.js || (echo "Runtime validation failed: dist/index.js not found" && false)
 
 # Switch to non-root user
 USER service

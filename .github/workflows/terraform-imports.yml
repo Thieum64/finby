@@ -86,6 +86,10 @@ jobs:
           fi
 
       - name: Import Service Resources
+        env:
+          TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
+          TF_VAR_region: ${{ vars.GCP_REGION || 'europe-west1' }}
+          TF_VAR_runtime_service_account: runtime-sa@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
         run: |
           echo "🚀 Importing Cloud Run services..."
 
@@ -94,19 +98,26 @@ jobs:
 
           for service in "${services[@]}"; do
             echo "⚙️ Processing service: $service"
-            
+
             # Navigate to service terraform directory
             cd infra/terraform/services/$service
-            
+
+            # Set service-specific image variable
+            export TF_VAR_image="europe-west1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/services/$service:latest"
+
             # Initialize terraform
             terraform init -lock-timeout=5m
-            
-            # Try to import the Cloud Run service (exact module address)
-            terraform import module.service.google_cloud_run_v2_service.service "projects/${{ vars.GCP_PROJECT_ID }}/locations/${{ vars.GCP_REGION || 'europe-west1' }}/services/$service" || echo "⚠️ Service $service already imported or doesn't exist"
 
-            # Try to import the IAM binding for public access if it exists
-            terraform import 'module.service.google_cloud_run_service_iam_binding.public_access[0]' "${{ vars.GCP_PROJECT_ID }}/locations/${{ vars.GCP_REGION || 'europe-west1' }}/services/$service roles/run.invoker" || echo "⚠️ IAM binding for $service already imported or doesn't exist"
-            
+            # Try to import the Cloud Run service (exact module address)
+            terraform import module.service.google_cloud_run_v2_service.service "projects/${{ vars.GCP_PROJECT_ID }}/locations/${{ vars.GCP_REGION || 'europe-west1' }}/services/$service" || true
+
+            # Run terraform plan to check if import was successful
+            if terraform plan -lock-timeout=5m -detailed-exitcode; then
+              echo "✅ $service import successful - 0 changes"
+            else
+              echo "❌ $service import incomplete - changes detected"
+            fi
+
             # Go back to root
             cd ../../../../
           done
@@ -116,7 +127,6 @@ jobs:
           TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
           TF_VAR_region: ${{ vars.GCP_REGION || 'europe-west1' }}
           TF_VAR_runtime_service_account: runtime-sa@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
-          TF_VAR_image: europe-west1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/services/placeholder:latest
         run: |
           echo "🔍 Verifying service imports with terraform plan..."
 
@@ -124,13 +134,16 @@ jobs:
           failed_services=()
 
           for service in "${services[@]}"; do
-            echo "📋 Checking $service terraform plan..."
+            echo "📋 Final verification for $service..."
             cd infra/terraform/services/$service
 
+            # Set service-specific image variable for final check
+            export TF_VAR_image="europe-west1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/services/$service:latest"
+
             if terraform plan -lock-timeout=5m -detailed-exitcode; then
-              echo "✅ $service plan shows 0 changes - import successful"
+              echo "✅ $service final plan shows 0 changes - import successful"
             else
-              echo "❌ $service plan shows changes - import incomplete"
+              echo "❌ $service final plan shows changes - import incomplete"
               failed_services+=("$service")
             fi
 
