@@ -1,0 +1,18 @@
+# Only exclude specific directories
+node_modules/
+.git/
+dist/
+coverage/
+.next/
+.nuxt/
+.cache/
+.temp/
+.tmp/
+
+# Keep essential files
+!package.json
+!pnpm-workspace.yaml
+!pnpm-lock.yaml
+!apps/
+!packages/
+!.dockerignore

@@ -188,6 +188,23 @@ jobs:
           terraform plan -lock-timeout=5m -out=service-tfplan
           terraform apply -auto-approve -lock-timeout=5m service-tfplan
 
+      - name: Idempotence Check
+        working-directory: infra/terraform/services/${{ matrix.service }}
+        env:
+          TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
+          TF_VAR_region: ${{ vars.GCP_REGION || 'europe-west1' }}
+          TF_VAR_runtime_service_account: runtime-sa@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+          TF_VAR_image: ${{ env.IMAGE_URI }}
+        run: |
+          echo "🔍 Checking idempotence - should show 0 changes"
+          terraform plan -lock-timeout=5m -detailed-exitcode
+          if [ $? -eq 0 ]; then
+            echo "✅ Idempotence verified - no changes needed"
+          else
+            echo "❌ Idempotence failed - infrastructure drift detected"
+            exit 1
+          fi
+
       - name: Get Service URL and Health Check
         working-directory: infra/terraform/services/${{ matrix.service }}
         run: |
