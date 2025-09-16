@@ -45,9 +45,8 @@ jobs:
 
           echo "🔄 Importing existing core infrastructure resources..."
 
-          # Import Firestore database (if exists and not already in state)
-          echo "📊 Importing Firestore database..."
-          terraform import google_firestore_database.database "projects/${{ vars.GCP_PROJECT_ID }}/databases/(default)" || echo "⚠️ Firestore database already imported or doesn't exist"
+          # Firestore not managed by Terraform - skipping import
+          echo "📊 Firestore database not managed by Terraform - skipping"
 
           # Import Pub/Sub Topics
           echo "🔔 Importing Pub/Sub topics..."
@@ -73,10 +72,18 @@ jobs:
 
       - name: Verify State After Imports
         working-directory: infra/terraform/environments/dev
+        env:
+          TF_VAR_enable_metrics: false
+          TF_VAR_enable_error_sink: false
         run: |
           echo "🔍 Running terraform plan to verify imports..."
-          terraform plan -lock-timeout=5m || true
-          echo "📋 Plan completed - check for any remaining diffs"
+          terraform plan -lock-timeout=5m -detailed-exitcode
+          if [ $? -eq 0 ]; then
+            echo "✅ Core infrastructure plan shows 0 changes - imports successful"
+          else
+            echo "❌ Core infrastructure plan shows changes - imports incomplete"
+            exit 1
+          fi
 
       - name: Import Service Resources
         run: |
@@ -94,11 +101,11 @@ jobs:
             # Initialize terraform
             terraform init -lock-timeout=5m
             
-            # Try to import the Cloud Run service
+            # Try to import the Cloud Run service (exact module address)
             terraform import module.service.google_cloud_run_v2_service.service "projects/${{ vars.GCP_PROJECT_ID }}/locations/${{ vars.GCP_REGION || 'europe-west1' }}/services/$service" || echo "⚠️ Service $service already imported or doesn't exist"
-            
+
             # Try to import the IAM binding for public access if it exists
-            terraform import module.service.google_cloud_run_service_iam_binding.public_access[0] "${{ vars.GCP_PROJECT_ID }}/locations/${{ vars.GCP_REGION || 'europe-west1' }}/services/$service roles/run.invoker" || echo "⚠️ IAM binding for $service already imported or doesn't exist"
+            terraform import 'module.service.google_cloud_run_service_iam_binding.public_access[0]' "${{ vars.GCP_PROJECT_ID }}/locations/${{ vars.GCP_REGION || 'europe-west1' }}/services/$service roles/run.invoker" || echo "⚠️ IAM binding for $service already imported or doesn't exist"
             
             # Go back to root
             cd ../../../../
@@ -109,13 +116,30 @@ jobs:
           echo "🔍 Verifying service imports with terraform plan..."
 
           services=(svc-authz svc-shops svc-requests svc-preview svc-ia-diff svc-quality svc-billing svc-notify svc-admin api-gateway)
+          failed_services=()
 
           for service in "${services[@]}"; do
             echo "📋 Checking $service terraform plan..."
             cd infra/terraform/services/$service
-            terraform plan -lock-timeout=5m -detailed-exitcode || echo "⚠️ $service has diffs (expected on first run)"
+
+            if terraform plan -lock-timeout=5m -detailed-exitcode; then
+              echo "✅ $service plan shows 0 changes - import successful"
+            else
+              echo "❌ $service plan shows changes - import incomplete"
+              failed_services+=("$service")
+            fi
+
             cd ../../../../
           done
+
+          if [ ${#failed_services[@]} -gt 0 ]; then
+            echo "❌ Failed services: ${failed_services[*]}"
+            echo "## ❌ Import Failures" >> $GITHUB_STEP_SUMMARY
+            echo "Services with remaining diffs: ${failed_services[*]}" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            echo "✅ All service imports successful - 0 changes for all services"
+          fi
 
       - name: Import Summary
         run: |

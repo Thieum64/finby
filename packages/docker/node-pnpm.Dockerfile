@@ -19,27 +19,22 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/ packages/
 COPY apps/ apps/
 
-# Install all dependencies 
+# Install all dependencies
 RUN pnpm install --frozen-lockfile
 
-# Copy pre-built dist directories (building locally to avoid Docker tsup issues)
-# This assumes CI builds these locally before Docker build
-RUN ls -la apps/$SERVICE/dist || echo "dist not found - will be copied from builder context"
+# Build the application
+RUN pnpm --filter=@hyperush/$SERVICE build
 
-# Remove dev dependencies to minimize image size
-RUN pnpm prune --prod
-
-# Create minimal runtime structure
+# Use pnpm deploy to create clean production dependencies
 RUN mkdir -p /tmp/service-runtime && \
-    cp -r node_modules /tmp/service-runtime/ && \
-    cp package.json /tmp/service-runtime/
+    pnpm deploy --filter=@hyperush/$SERVICE --prod /tmp/service-runtime
 
-# Stage 2: Runtime - Minimal production image  
-FROM node@sha256:eabac870db94f7342d6c33560d6613f188bbcf4bbe1f4eb47d5e2a08e1a37722 AS runtime
+# Stage 2: Runtime - Minimal production image
+FROM node:20-slim@sha256:3d2dc1bc9b2a3c01c8e65bb2f9e47a8c7e6bd3d8c1a59cf9b2e72e2be86c4e1e AS runtime
 
-# Create non-root user for security (Alpine style)
-RUN addgroup -g 1001 -S service && \
-    adduser -S service -u 1001 -G service
+# Create non-root user for security
+RUN groupadd -g 1001 service && \
+    useradd -r -u 1001 -g service service
 
 # Set working directory
 WORKDIR /app
@@ -47,9 +42,8 @@ WORKDIR /app
 # Declare ARG again for this stage
 ARG SERVICE
 
-# Copy built application and production dependencies from builder stage
+# Copy production dependencies and built application from builder stage
 COPY --from=builder --chown=service:service /tmp/service-runtime .
-COPY --from=builder --chown=service:service /app/apps/$SERVICE/dist ./dist
 
 # Switch to non-root user
 USER service

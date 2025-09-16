@@ -26,33 +26,9 @@ data "google_project" "project" {
   project_id = var.project_id
 }
 
-# Firestore Database - Back under IaC with protection
+# Firestore Database - Not managed as Terraform resource
 # Current production state: location_id=eur3, pitr=disabled
-resource "google_firestore_database" "database" {
-  project                           = var.project_id
-  name                              = "(default)"
-  location_id                       = "eur3"  # Match existing production setting
-  type                              = "FIRESTORE_NATIVE"
-  concurrency_mode                  = "PESSIMISTIC"
-  app_engine_integration_mode       = "DISABLED"
-  point_in_time_recovery_enablement = "POINT_IN_TIME_RECOVERY_DISABLED"  # Match existing
-  delete_protection_state           = "DELETE_PROTECTION_DISABLED"
-  
-  lifecycle {
-    prevent_destroy = true
-    # Ignore changes to fields that may drift to avoid replacements
-    ignore_changes = [
-      location_id,
-      concurrency_mode,
-      app_engine_integration_mode,
-      point_in_time_recovery_enablement,
-      earliest_version_time,
-      etag,
-      uid,
-      version_retention_period
-    ]
-  }
-}
+# Access via data source if needed by applications
 
 # Infrastructure modules
 module "pubsub" {
@@ -105,14 +81,7 @@ output "logging_metrics" {
   value       = module.logging.metrics
 }
 
-output "firestore_info" {
-  description = "Firestore database information"
-  value = {
-    name         = google_firestore_database.database.name
-    location_id  = google_firestore_database.database.location_id
-    type         = google_firestore_database.database.type
-  }
-}
+# Firestore outputs removed - not managed by Terraform
 
 output "enabled_apis" {
   description = "List of enabled APIs"
