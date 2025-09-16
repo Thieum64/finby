@@ -1,4 +1,4 @@
-# Only exclude specific directories
+# Exclude unnecessary directories for build context
 node_modules/
 .git/
 dist/
@@ -8,11 +8,6 @@ coverage/
 .cache/
 .temp/
 .tmp/
-
-# Keep essential files
-!package.json
-!pnpm-workspace.yaml
-!pnpm-lock.yaml
-!apps/
-!packages/
-!.dockerignore
+*.log
+.DS_Store
+.env.local
