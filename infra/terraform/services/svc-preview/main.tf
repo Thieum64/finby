@@ -36,6 +36,12 @@ module "service" {
   min_instances = 0
   max_instances = 3
 
+  # Optional variables for imports compatibility
+  container_concurrency = var.container_concurrency
+  port                  = var.port
+  ingress               = var.ingress
+  execution_environment = var.execution_environment
+
   enable_public_invoker = true
 
   env_vars = merge(

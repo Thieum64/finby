@@ -28,13 +28,19 @@ module "service" {
   location              = var.region
   project_id            = var.project_id
   runtime_service_account = var.runtime_service_account
-  
+
   image = var.image
-  
+
   cpu           = "1000m"
   memory        = "512Mi"
   min_instances = 0
   max_instances = 3
+
+  # Optional variables for imports compatibility
+  container_concurrency = var.container_concurrency
+  port                  = var.port
+  ingress               = var.ingress
+  execution_environment = var.execution_environment
 
   enable_public_invoker = true
 

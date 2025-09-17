@@ -24,3 +24,28 @@ variable "env_vars" {
   type        = map(string)
   default     = {}
 }
+
+# Optional variables for terraform imports compatibility
+variable "container_concurrency" {
+  description = "Container concurrency limit"
+  type        = number
+  default     = null
+}
+
+variable "port" {
+  description = "Container port"
+  type        = number
+  default     = null
+}
+
+variable "ingress" {
+  description = "Ingress configuration"
+  type        = string
+  default     = null
+}
+
+variable "execution_environment" {
+  description = "Execution environment"
+  type        = string
+  default     = null
+}
