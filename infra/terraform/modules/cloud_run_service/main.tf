@@ -106,7 +106,7 @@ resource "google_cloud_run_v2_service" "service" {
     service_account = var.runtime_service_account
 
     execution_environment = var.execution_environment
-    container_concurrency = var.container_concurrency
+    max_instance_request_concurrency = var.container_concurrency
 
     containers {
       image = var.image
