@@ -8,7 +8,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: terraform-imports-${{ github.ref }}
+  group: tfstate-core
   cancel-in-progress: false
 
 jobs:
@@ -41,7 +41,7 @@ jobs:
       - name: Import Core Infrastructure Resources
         working-directory: infra/terraform/environments/dev
         run: |
-          terraform init -lock-timeout=5m
+          terraform init -lock-timeout=10m
 
           echo "🔄 Importing existing core infrastructure resources..."
 
@@ -77,7 +77,7 @@ jobs:
           TF_VAR_enable_error_sink: false
         run: |
           echo "🔍 Running terraform plan to verify imports..."
-          terraform plan -lock-timeout=5m -detailed-exitcode
+          terraform plan -lock-timeout=10m -detailed-exitcode
           if [ $? -eq 0 ]; then
             echo "✅ Core infrastructure plan shows 0 changes - imports successful"
           else
@@ -107,7 +107,7 @@ jobs:
             export TF_VAR_runtime_service_account=$(echo "$current" | jq -r '.spec.template.serviceAccount // empty')
             export TF_VAR_min_instances=$(echo "$current" | jq -r '.spec.template.scaling.minInstanceCount // empty')
             export TF_VAR_max_instances=$(echo "$current" | jq -r '.spec.template.scaling.maxInstanceCount // empty')
-            export TF_VAR_container_concurrency=$(echo "$current" | jq -r '.spec.template.containerConcurrency // empty')
+            export TF_VAR_container_concurrency=$(echo "$current" | jq -r '.spec.template.maxInstanceRequestConcurrency // empty')
             export TF_VAR_port=$(echo "$current" | jq -r '.spec.template.containers[0].ports[0].containerPort // empty')
             export TF_VAR_ingress=$(echo "$current" | jq -r '.spec.ingress // empty')
             export TF_VAR_execution_environment=$(echo "$current" | jq -r '.spec.template.executionEnvironment // empty')
@@ -131,13 +131,13 @@ jobs:
             cd infra/terraform/services/$service
 
             # Initialize terraform
-            terraform init -lock-timeout=5m
+            terraform init -lock-timeout=10m
 
             # Try to import the Cloud Run service (exact module address)
             terraform import module.service.google_cloud_run_v2_service.service "projects/${{ vars.GCP_PROJECT_ID }}/locations/${{ vars.GCP_REGION || 'europe-west1' }}/services/$service" || echo "⚠️ Service $service already imported or absent"
 
             # Run terraform plan to check if import was successful
-            if terraform plan -lock-timeout=5m -detailed-exitcode; then
+            if terraform plan -lock-timeout=10m -detailed-exitcode; then
               echo "✅ $service import successful - 0 changes"
             else
               echo "❌ $service import incomplete - changes detected"
@@ -168,7 +168,7 @@ jobs:
             export TF_VAR_runtime_service_account=$(echo "$current" | jq -r '.spec.template.serviceAccount // empty')
             export TF_VAR_min_instances=$(echo "$current" | jq -r '.spec.template.scaling.minInstanceCount // empty')
             export TF_VAR_max_instances=$(echo "$current" | jq -r '.spec.template.scaling.maxInstanceCount // empty')
-            export TF_VAR_container_concurrency=$(echo "$current" | jq -r '.spec.template.containerConcurrency // empty')
+            export TF_VAR_container_concurrency=$(echo "$current" | jq -r '.spec.template.maxInstanceRequestConcurrency // empty')
             export TF_VAR_port=$(echo "$current" | jq -r '.spec.template.containers[0].ports[0].containerPort // empty')
             export TF_VAR_ingress=$(echo "$current" | jq -r '.spec.ingress // empty')
             export TF_VAR_execution_environment=$(echo "$current" | jq -r '.spec.template.executionEnvironment // empty')
@@ -183,7 +183,7 @@ jobs:
 
             cd infra/terraform/services/$service
 
-            if terraform plan -lock-timeout=5m -detailed-exitcode; then
+            if terraform plan -lock-timeout=10m -detailed-exitcode; then
               echo "✅ $service final plan shows 0 changes - import successful"
             else
               echo "❌ $service final plan shows changes - import incomplete"
