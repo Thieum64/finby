@@ -138,34 +138,28 @@ jobs:
         run: gcloud auth configure-docker ${{ env.REGISTRY }}
 
       - name: BUILD AND PUSH CONTAINER IMAGE VIA CLOUD BUILD
+        working-directory: ${{ github.workspace }}
         run: |
           IMAGE_URI="${{ env.REGISTRY }}/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ matrix.service }}:${{ github.sha }}"
           IMAGE_URI_LATEST="${{ env.REGISTRY }}/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ matrix.service }}:latest"
 
-          # Debug build context
-          echo "📋 Using Cloud Build to avoid Docker context issues..."
-
-          gcloud builds submit \
-            --config=/dev/stdin \
-            --substitutions=_SERVICE=${{ matrix.service }},_IMAGE_URI=$IMAGE_URI,_IMAGE_URI_LATEST=$IMAGE_URI_LATEST \
-            . << 'EOF'
+          # Create cloudbuild.yaml config file
+          cat > /tmp/cloudbuild.yaml << 'EOF'
           steps:
           - name: 'gcr.io/cloud-builders/docker'
-            args: 
-            - 'build'
-            - '--platform=linux/amd64'
-            - '--file=packages/docker/node-pnpm.Dockerfile'
-            - '--build-arg=SERVICE=${_SERVICE}'
-            - '--tag=${_IMAGE_URI}'
-            - '--tag=${_IMAGE_URI_LATEST}'
-            - '.'
-          - name: 'gcr.io/cloud-builders/docker'
-            args: ['push', '${_IMAGE_URI}']
-          - name: 'gcr.io/cloud-builders/docker'
-            args: ['push', '${_IMAGE_URI_LATEST}']
-          options:
-            defaultLogsBucketBehavior: REGIONAL_USER_OWNED_BUCKET
+            args: ['build', '-f', 'packages/docker/node-pnpm.Dockerfile', '--build-arg', 'SERVICE=${_SERVICE}', '-t', '${_IMAGE_SHA}', '-t', '${_IMAGE_LATEST}', '.']
+          images:
+          - '${_IMAGE_SHA}'
+          - '${_IMAGE_LATEST}'
           EOF
+
+          # Submit build from workspace root with explicit config
+          echo "📋 Building from $GITHUB_WORKSPACE with Cloud Build..."
+          gcloud builds submit "$GITHUB_WORKSPACE" \
+            --project "${{ vars.GCP_PROJECT_ID }}" \
+            --region "${{ vars.GCP_REGION }}" \
+            --config /tmp/cloudbuild.yaml \
+            --substitutions _SERVICE=${{ matrix.service }},_IMAGE_SHA=$IMAGE_URI,_IMAGE_LATEST=$IMAGE_URI_LATEST
 
           # Get image digest (approximate - Cloud Build handles this)
           IMAGE_DIGEST="sha256:$(date +%s | sha256sum | head -c 40)"

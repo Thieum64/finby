@@ -102,6 +102,13 @@ jobs:
             echo "📊 Retrieving current state for $service..."
             current=$(gcloud run services describe "$service" --region="${{ vars.GCP_REGION || 'europe-west1' }}" --format=json 2>/dev/null || echo '{}')
 
+            # Check if service exists by testing metadata.name
+            service_name=$(echo "$current" | jq -r '.metadata.name // empty')
+            if [ "$service_name" == "" ] || [ "$service_name" == "empty" ]; then
+              echo "⏭️ Skipping $service (service does not exist yet)"
+              continue
+            fi
+
             # Export TF_VAR variables from actual state (Cloud Run v2 API)
             # Only export non-empty values to avoid type validation errors
             image_val=$(echo "$current" | jq -r '.spec.template.containers[0].image // empty')
@@ -177,6 +184,13 @@ jobs:
 
             # Get current service state from gcloud (same as import step)
             current=$(gcloud run services describe "$service" --region="${{ vars.GCP_REGION || 'europe-west1' }}" --format=json 2>/dev/null || echo '{}')
+
+            # Check if service exists by testing metadata.name
+            service_name=$(echo "$current" | jq -r '.metadata.name // empty')
+            if [ "$service_name" == "" ] || [ "$service_name" == "empty" ]; then
+              echo "⏭️ Skipping $service (service does not exist yet)"
+              continue
+            fi
 
             # Export exact same TF_VAR variables as import step (Cloud Run v2 API)
             # Only export non-empty values to avoid type validation errors

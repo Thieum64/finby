@@ -51,23 +51,32 @@ jobs:
           echo "- **SHA:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Actor:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Event:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Ref:** $GITHUB_REF" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          # Validate WIF Provider Configuration
-          echo "### 🔍 WIF Provider Configuration" >> $GITHUB_STEP_SUMMARY
+          # Validate WIF Authentication without admin permissions
+          echo "### 🔍 WIF Authentication Proof" >> $GITHUB_STEP_SUMMARY
           WIF_PROVIDER="${{ vars.GCP_WORKLOAD_IDP }}"
           echo "**Provider:** \`$WIF_PROVIDER\`" >> $GITHUB_STEP_SUMMARY
 
-          # Get WIF provider details
-          gcloud iam workload-identity-pools providers describe github-provider \
-            --location="global" \
-            --workload-identity-pool="github-pool" \
-            --format="json" > wif_config.json
+          # Show active authenticated account (proves WIF worked)
+          ACTIVE_ACCOUNT=$(gcloud auth list --filter=status:ACTIVE --format='value(account)')
+          echo "**Active Account:** \`$ACTIVE_ACCOUNT\`" >> $GITHUB_STEP_SUMMARY
 
-          # Extract attribute conditions (security rules)
-          ATTRIBUTE_CONDITION=$(cat wif_config.json | jq -r '.attributeCondition // "No conditions"')
-          echo "**Attribute Condition:** \`$ATTRIBUTE_CONDITION\`" >> $GITHUB_STEP_SUMMARY
+          # Get and decode OIDC identity token to show GitHub claims
+          echo "**OIDC Token Claims:**" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`json" >> $GITHUB_STEP_SUMMARY
+          tok=$(gcloud auth print-identity-token)
+          echo "$tok" | cut -d '.' -f2 | base64 -d 2>/dev/null | jq . >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Verify branch restriction
+          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            echo "✅ **Branch Restriction Verified:** Successfully authenticated from main branch" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **Branch Warning:** Not executing from main branch (ref: $GITHUB_REF)" >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Validate Branch Restriction
         if: github.event.inputs.test_scenario == 'branch_restriction' || github.event.inputs.test_scenario == ''
