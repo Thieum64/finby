@@ -1,7 +1,30 @@
+# Git and development files
 .git/
-node_modules/
-dist/
-coverage/
+.github/
+infra/
+
+# Build artifacts and caches
+**/node_modules/
+**/dist/
+**/build/
+**/coverage/
+**/.next/
+**/.nuxt/
+
+# IDE and logs
+.vscode/
+.idea/
 *.log
+**/*.log
+
+# OS files
 .DS_Store
+Thumbs.db
 .env
+
+# Keep essential files for build
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!packages/
+!apps/
