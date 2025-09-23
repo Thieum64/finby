@@ -155,11 +155,31 @@ jobs:
 
           # Submit build from workspace root with explicit config
           echo "📋 Building from $GITHUB_WORKSPACE with Cloud Build..."
-          gcloud builds submit "$GITHUB_WORKSPACE" \
+          BUILD_ID=$(gcloud builds submit "$GITHUB_WORKSPACE" \
             --project "${{ vars.GCP_PROJECT_ID }}" \
             --region "${{ vars.GCP_REGION }}" \
             --config /tmp/cloudbuild.yaml \
-            --substitutions _SERVICE=${{ matrix.service }},_IMAGE_SHA=$IMAGE_URI,_IMAGE_LATEST=$IMAGE_URI_LATEST
+            --substitutions _SERVICE=${{ matrix.service }},_IMAGE_SHA=$IMAGE_URI,_IMAGE_LATEST=$IMAGE_URI_LATEST \
+            --async --format="value(id)")
+
+          echo "⏳ Build ID: $BUILD_ID - Waiting for completion..."
+
+          # Wait for build completion
+          while true; do
+            STATUS=$(gcloud builds describe "$BUILD_ID" --region="${{ vars.GCP_REGION }}" --format="value(status)")
+            echo "Build status: $STATUS"
+
+            if [ "$STATUS" = "SUCCESS" ]; then
+              echo "✅ Build completed successfully"
+              break
+            elif [ "$STATUS" = "FAILURE" ] || [ "$STATUS" = "TIMEOUT" ] || [ "$STATUS" = "CANCELLED" ]; then
+              echo "❌ Build failed with status: $STATUS"
+              exit 1
+            else
+              echo "⏳ Build still running..."
+              sleep 10
+            fi
+          done
 
           # Get image digest (approximate - Cloud Build handles this)
           IMAGE_DIGEST="sha256:$(date +%s | sha256sum | head -c 40)"
