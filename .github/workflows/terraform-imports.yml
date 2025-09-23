@@ -103,14 +103,25 @@ jobs:
             current=$(gcloud run services describe "$service" --region="${{ vars.GCP_REGION || 'europe-west1' }}" --format=json 2>/dev/null || echo '{}')
 
             # Export TF_VAR variables from actual state (Cloud Run v2 API)
-            export TF_VAR_image=$(echo "$current" | jq -r '.spec.template.containers[0].image // empty')
-            export TF_VAR_runtime_service_account=$(echo "$current" | jq -r '.spec.template.serviceAccount // empty')
-            export TF_VAR_min_instances=$(echo "$current" | jq -r '.spec.template.scaling.minInstanceCount // empty')
-            export TF_VAR_max_instances=$(echo "$current" | jq -r '.spec.template.scaling.maxInstanceCount // empty')
-            export TF_VAR_container_concurrency=$(echo "$current" | jq -r '.spec.template.maxInstanceRequestConcurrency // empty')
-            export TF_VAR_port=$(echo "$current" | jq -r '.spec.template.containers[0].ports[0].containerPort // empty')
-            export TF_VAR_ingress=$(echo "$current" | jq -r '.spec.ingress // empty')
-            export TF_VAR_execution_environment=$(echo "$current" | jq -r '.spec.template.executionEnvironment // empty')
+            # Only export non-empty values to avoid type validation errors
+            image_val=$(echo "$current" | jq -r '.spec.template.containers[0].image // empty')
+            sa_val=$(echo "$current" | jq -r '.spec.template.serviceAccount // empty')
+            min_inst_val=$(echo "$current" | jq -r '.spec.template.scaling.minInstanceCount // empty')
+            max_inst_val=$(echo "$current" | jq -r '.spec.template.scaling.maxInstanceCount // empty')
+            concurrency_val=$(echo "$current" | jq -r '.spec.template.maxInstanceRequestConcurrency // empty')
+            port_val=$(echo "$current" | jq -r '.spec.template.containers[0].ports[0].containerPort // empty')
+            ingress_val=$(echo "$current" | jq -r '.spec.ingress // empty')
+            exec_env_val=$(echo "$current" | jq -r '.spec.template.executionEnvironment // empty')
+
+            # Only export if not empty
+            [ "$image_val" != "" ] && export TF_VAR_image="$image_val"
+            [ "$sa_val" != "" ] && export TF_VAR_runtime_service_account="$sa_val"
+            [ "$min_inst_val" != "" ] && export TF_VAR_min_instances="$min_inst_val"
+            [ "$max_inst_val" != "" ] && export TF_VAR_max_instances="$max_inst_val"
+            [ "$concurrency_val" != "" ] && export TF_VAR_container_concurrency="$concurrency_val"
+            [ "$port_val" != "" ] && export TF_VAR_port="$port_val"
+            [ "$ingress_val" != "" ] && export TF_VAR_ingress="$ingress_val"
+            [ "$exec_env_val" != "" ] && export TF_VAR_execution_environment="$exec_env_val"
 
             # Check IAM policy for public invoker
             has_allUsers=$(gcloud run services get-iam-policy "$service" --region="${{ vars.GCP_REGION || 'europe-west1' }}" --format="json" 2>/dev/null | jq -r '[.bindings[]?|select(.role=="roles/run.invoker")|.members[]]|index("allUsers")')
@@ -121,10 +132,14 @@ jobs:
             fi
 
             echo "📋 Variables exported for $service:"
-            echo "  Image: $TF_VAR_image"
-            echo "  Service Account: $TF_VAR_runtime_service_account"
-            echo "  Min Instances: $TF_VAR_min_instances"
-            echo "  Max Instances: $TF_VAR_max_instances"
+            echo "  Image: ${TF_VAR_image:-'(not set)'}"
+            echo "  Service Account: ${TF_VAR_runtime_service_account:-'(not set)'}"
+            echo "  Min Instances: ${TF_VAR_min_instances:-'(not set)'}"
+            echo "  Max Instances: ${TF_VAR_max_instances:-'(not set)'}"
+            echo "  Container Concurrency: ${TF_VAR_container_concurrency:-'(not set)'}"
+            echo "  Port: ${TF_VAR_port:-'(not set)'}"
+            echo "  Ingress: ${TF_VAR_ingress:-'(not set)'}"
+            echo "  Execution Environment: ${TF_VAR_execution_environment:-'(not set)'}"
             echo "  Public Invoker: $TF_VAR_enable_public_invoker"
 
             # Navigate to service terraform directory
@@ -164,14 +179,25 @@ jobs:
             current=$(gcloud run services describe "$service" --region="${{ vars.GCP_REGION || 'europe-west1' }}" --format=json 2>/dev/null || echo '{}')
 
             # Export exact same TF_VAR variables as import step (Cloud Run v2 API)
-            export TF_VAR_image=$(echo "$current" | jq -r '.spec.template.containers[0].image // empty')
-            export TF_VAR_runtime_service_account=$(echo "$current" | jq -r '.spec.template.serviceAccount // empty')
-            export TF_VAR_min_instances=$(echo "$current" | jq -r '.spec.template.scaling.minInstanceCount // empty')
-            export TF_VAR_max_instances=$(echo "$current" | jq -r '.spec.template.scaling.maxInstanceCount // empty')
-            export TF_VAR_container_concurrency=$(echo "$current" | jq -r '.spec.template.maxInstanceRequestConcurrency // empty')
-            export TF_VAR_port=$(echo "$current" | jq -r '.spec.template.containers[0].ports[0].containerPort // empty')
-            export TF_VAR_ingress=$(echo "$current" | jq -r '.spec.ingress // empty')
-            export TF_VAR_execution_environment=$(echo "$current" | jq -r '.spec.template.executionEnvironment // empty')
+            # Only export non-empty values to avoid type validation errors
+            image_val=$(echo "$current" | jq -r '.spec.template.containers[0].image // empty')
+            sa_val=$(echo "$current" | jq -r '.spec.template.serviceAccount // empty')
+            min_inst_val=$(echo "$current" | jq -r '.spec.template.scaling.minInstanceCount // empty')
+            max_inst_val=$(echo "$current" | jq -r '.spec.template.scaling.maxInstanceCount // empty')
+            concurrency_val=$(echo "$current" | jq -r '.spec.template.maxInstanceRequestConcurrency // empty')
+            port_val=$(echo "$current" | jq -r '.spec.template.containers[0].ports[0].containerPort // empty')
+            ingress_val=$(echo "$current" | jq -r '.spec.ingress // empty')
+            exec_env_val=$(echo "$current" | jq -r '.spec.template.executionEnvironment // empty')
+
+            # Only export if not empty
+            [ "$image_val" != "" ] && export TF_VAR_image="$image_val"
+            [ "$sa_val" != "" ] && export TF_VAR_runtime_service_account="$sa_val"
+            [ "$min_inst_val" != "" ] && export TF_VAR_min_instances="$min_inst_val"
+            [ "$max_inst_val" != "" ] && export TF_VAR_max_instances="$max_inst_val"
+            [ "$concurrency_val" != "" ] && export TF_VAR_container_concurrency="$concurrency_val"
+            [ "$port_val" != "" ] && export TF_VAR_port="$port_val"
+            [ "$ingress_val" != "" ] && export TF_VAR_ingress="$ingress_val"
+            [ "$exec_env_val" != "" ] && export TF_VAR_execution_environment="$exec_env_val"
 
             # Check IAM policy for public invoker
             has_allUsers=$(gcloud run services get-iam-policy "$service" --region="${{ vars.GCP_REGION || 'europe-west1' }}" --format="json" 2>/dev/null | jq -r '[.bindings[]?|select(.role=="roles/run.invoker")|.members[]]|index("allUsers")')
