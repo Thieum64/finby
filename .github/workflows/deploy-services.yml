@@ -46,6 +46,25 @@ jobs:
         with:
           terraform_wrapper: false
 
+      - name: Verify Cloud Build SA Permissions
+        run: |
+          echo "🔐 Verifying Cloud Build service account permissions..."
+          PROJECT_NUMBER=$(gcloud projects describe ${{ vars.GCP_PROJECT_ID }} --format="value(projectNumber)")
+          CLOUD_BUILD_SA="${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com"
+
+          echo "Cloud Build SA: $CLOUD_BUILD_SA"
+          echo "Adding artifactregistry.writer role if needed..."
+
+          gcloud artifacts repositories add-iam-policy-binding services \
+            --location="${{ vars.GCP_REGION }}" \
+            --member="serviceAccount:${CLOUD_BUILD_SA}" \
+            --role="roles/artifactregistry.writer" || echo "⚠️ Could not add Cloud Build SA permissions (may lack rights)"
+
+          echo "📋 Current policy for services repository:" >> $GITHUB_STEP_SUMMARY
+          gcloud artifacts repositories get-iam-policy services \
+            --location="${{ vars.GCP_REGION }}" \
+            --format="json" | jq . >> $GITHUB_STEP_SUMMARY || echo "Could not retrieve policy"
+
       - name: Deploy Core Infrastructure
         working-directory: infra/terraform/environments/dev
         env:
@@ -181,12 +200,31 @@ jobs:
             fi
           done
 
-          # Get image digest (approximate - Cloud Build handles this)
-          IMAGE_DIGEST="sha256:$(date +%s | sha256sum | head -c 40)"
+          # Get actual digest from Cloud Build results
+          DIGEST=$(gcloud builds describe "$BUILD_ID" --region="${{ vars.GCP_REGION }}" --format="value(results.images[0].digest)")
+          if [ -z "$DIGEST" ]; then
+            DIGEST=$(gcloud builds describe "$BUILD_ID" --region="${{ vars.GCP_REGION }}" --format="value(results.images[1].digest)")
+          fi
+          if [ -z "$DIGEST" ]; then
+            echo "❌ Failed to get digest from build results"
+            exit 1
+          fi
+
+          # Construct image URIs
+          IMAGE_URI_SHA="${{ env.REGISTRY }}/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ matrix.service }}:${{ github.sha }}"
+          IMAGE_URI_LATEST="${{ env.REGISTRY }}/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ matrix.service }}:latest"
+          IMAGE_URI_DIGEST="${{ env.REGISTRY }}/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ matrix.service }}@${DIGEST}"
+
+          echo "📦 Image URIs:"
+          echo "  SHA: $IMAGE_URI_SHA"
+          echo "  Latest: $IMAGE_URI_LATEST"
+          echo "  Digest: $IMAGE_URI_DIGEST"
 
           # Export to environment
-          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
-          echo "IMAGE_DIGEST=$IMAGE_DIGEST" >> $GITHUB_ENV
+          echo "IMAGE_URI_SHA=$IMAGE_URI_SHA" >> $GITHUB_ENV
+          echo "IMAGE_URI_LATEST=$IMAGE_URI_LATEST" >> $GITHUB_ENV
+          echo "IMAGE_URI_DIGEST=$IMAGE_URI_DIGEST" >> $GITHUB_ENV
+          echo "IMAGE_DIGEST=$DIGEST" >> $GITHUB_ENV
 
       - name: Setup Terraform for Service
         uses: hashicorp/setup-terraform@v3
@@ -199,7 +237,7 @@ jobs:
           TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
           TF_VAR_region: ${{ vars.GCP_REGION || 'europe-west1' }}
           TF_VAR_runtime_service_account: runtime-sa@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
-          TF_VAR_image: ${{ env.IMAGE_URI }}
+          TF_VAR_image: ${{ env.IMAGE_URI_DIGEST }}
         run: |
           terraform init -lock-timeout=10m
           terraform plan -lock-timeout=10m -out=service-tfplan
@@ -211,7 +249,7 @@ jobs:
           TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
           TF_VAR_region: ${{ vars.GCP_REGION || 'europe-west1' }}
           TF_VAR_runtime_service_account: runtime-sa@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
-          TF_VAR_image: ${{ env.IMAGE_URI }}
+          TF_VAR_image: ${{ env.IMAGE_URI_DIGEST }}
         run: |
           echo "🔍 Checking idempotence - should show 0 changes"
           terraform plan -lock-timeout=10m -detailed-exitcode

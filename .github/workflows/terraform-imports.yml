@@ -119,6 +119,8 @@ jobs:
             port_val=$(echo "$current" | jq -r '.spec.template.containers[0].ports[0].containerPort // empty')
             ingress_val=$(echo "$current" | jq -r '.spec.ingress // empty')
             exec_env_val=$(echo "$current" | jq -r '.spec.template.executionEnvironment // empty')
+            cpu_val=$(echo "$current" | jq -r '.spec.template.containers[0].resources.limits.cpu // empty')
+            memory_val=$(echo "$current" | jq -r '.spec.template.containers[0].resources.limits.memory // empty')
 
             # Only export if not empty
             [ "$image_val" != "" ] && export TF_VAR_image="$image_val"
@@ -129,6 +131,8 @@ jobs:
             [ "$port_val" != "" ] && export TF_VAR_port="$port_val"
             [ "$ingress_val" != "" ] && export TF_VAR_ingress="$ingress_val"
             [ "$exec_env_val" != "" ] && export TF_VAR_execution_environment="$exec_env_val"
+            [ -n "$cpu_val" ] && export TF_VAR_cpu="$cpu_val"
+            [ -n "$memory_val" ] && export TF_VAR_memory="$memory_val"
 
             # Check IAM policy for public invoker
             has_allUsers=$(gcloud run services get-iam-policy "$service" --region="${{ vars.GCP_REGION || 'europe-west1' }}" --format="json" 2>/dev/null | jq -r '[.bindings[]?|select(.role=="roles/run.invoker")|.members[]]|index("allUsers")')
@@ -202,6 +206,8 @@ jobs:
             port_val=$(echo "$current" | jq -r '.spec.template.containers[0].ports[0].containerPort // empty')
             ingress_val=$(echo "$current" | jq -r '.spec.ingress // empty')
             exec_env_val=$(echo "$current" | jq -r '.spec.template.executionEnvironment // empty')
+            cpu_val=$(echo "$current" | jq -r '.spec.template.containers[0].resources.limits.cpu // empty')
+            memory_val=$(echo "$current" | jq -r '.spec.template.containers[0].resources.limits.memory // empty')
 
             # Only export if not empty
             [ "$image_val" != "" ] && export TF_VAR_image="$image_val"
@@ -212,6 +218,8 @@ jobs:
             [ "$port_val" != "" ] && export TF_VAR_port="$port_val"
             [ "$ingress_val" != "" ] && export TF_VAR_ingress="$ingress_val"
             [ "$exec_env_val" != "" ] && export TF_VAR_execution_environment="$exec_env_val"
+            [ -n "$cpu_val" ] && export TF_VAR_cpu="$cpu_val"
+            [ -n "$memory_val" ] && export TF_VAR_memory="$memory_val"
 
             # Check IAM policy for public invoker
             has_allUsers=$(gcloud run services get-iam-policy "$service" --region="${{ vars.GCP_REGION || 'europe-west1' }}" --format="json" 2>/dev/null | jq -r '[.bindings[]?|select(.role=="roles/run.invoker")|.members[]]|index("allUsers")')
