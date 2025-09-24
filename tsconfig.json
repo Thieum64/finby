@@ -1,0 +1,8 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/lib-common" },
+    { "path": "./apps/api-gateway" },
+    { "path": "./apps/svc-authz" }
+  ]
+}
