@@ -1,2 +1,2 @@
-import { helloCommon } from "../../packages/lib-common/src/index";
+import { helloCommon } from "lib-common";
 console.log("svc-authz boot", helloCommon());

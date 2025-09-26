@@ -1,2 +1,2 @@
-import { helloCommon } from "../../packages/lib-common/src/index";
+import { helloCommon } from "lib-common";
 console.log("api-gateway boot", helloCommon());
