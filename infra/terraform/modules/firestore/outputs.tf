@@ -1,0 +1,1 @@
+# Empty for now - will be populated when implementing Firestore rules/indexes

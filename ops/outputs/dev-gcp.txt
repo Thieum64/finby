@@ -1,0 +1,8 @@
+PROJECT_ID=hyperush-dev-250930115246
+PROJECT_NUMBER=443512026283
+REGION=europe-west1
+ARTIFACT_REPO=hp-dev
+DEPLOY_SA_EMAIL=deploy-sa@hyperush-dev-250930115246.iam.gserviceaccount.com
+WIF_POOL=github-pool
+WIF_PROVIDER=github-provider
+WIF_PROVIDER_RESOURCE=projects/443512026283/locations/global/workloadIdentityPools/github-pool/providers/github-provider

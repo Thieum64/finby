@@ -1,0 +1,10 @@
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["build", "-t", "europe-west1-docker.pkg.dev/hp-dev-537a76/hp-dev/svc-authz:latest", "."]
+    dir: "apps/svc-authz"
+
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["push", "europe-west1-docker.pkg.dev/hp-dev-537a76/hp-dev/svc-authz:latest"]
+
+images:
+  - "europe-west1-docker.pkg.dev/hp-dev-537a76/hp-dev/svc-authz:latest"
