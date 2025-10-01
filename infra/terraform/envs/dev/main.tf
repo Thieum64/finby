@@ -22,7 +22,7 @@ module "svc_authz" {
   env = {
     NODE_ENV             = "development"
     OTEL_TRACES_EXPORTER = "none"
-    BUILD_TIMESTAMP      = "20250930-1449"
+    BUILD_TIMESTAMP      = "20251001-0750"
   }
 }
 
