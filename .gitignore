@@ -8,3 +8,10 @@ build
 .DS_Store
 *.log
 coverage
+
+# Terraform
+**/.terraform/
+**/.tfstate
+**/.tfstate.*
+crash.log
+crash.*.log
