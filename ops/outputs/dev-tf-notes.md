@@ -41,37 +41,93 @@ gcloud pubsub topics list --project hyperush-dev-250930115246 --format="value(na
 ### Service URL (obtenue via terraform output)
 
 ```
-SVC_URL="https://svc-authz-1062969768-ew1.a.run.app"
+SVC_URL="https://svc-authz-2gc7gddpva-ew.a.run.app"
 ```
 
-### Test du service - Phase 0.2 FINALE
+### Test du service - Phase 0.2 FINALE avec catch-all v6
 
-**Test endpoint racine (fonctionnel):**
+**Test /healthz (PROBLÈME PERSISTANT):**
 
 ```bash
-curl -sS "${SVC_URL}/"
+curl -i -sS "${SVC_URL}/healthz"
 ```
 
 **Résultat:**
 
-```json
-{ "ok": true, "service": "svc-authz", "endpoint": "root" }
+```
+HTTP/2 404
+content-type: text/html; charset=UTF-8
+date: Wed, 01 Oct 2025 08:03:13 GMT
+
+<!DOCTYPE html>
+<html lang=en>
+[...Google 404 page...]
+<p>The requested URL <code>/healthz</code> was not found on this server.
+```
+
+**Status HTTP:** 404 ❌
+
+**Test endpoint racine (fonctionnel):**
+
+```bash
+curl -i -sS "${SVC_URL}/"
+```
+
+**Résultat:**
+
+```
+HTTP/2 200
+x-powered-by: Express
+content-type: application/json; charset=utf-8
+date: Wed, 01 Oct 2025 08:01:17 GMT
+
+{"ok":true,"service":"svc-authz","endpoint":"root"}
 ```
 
 **Status HTTP:** 200 ✅
 
-**Note /healthz:** Problème de routage Cloud Run (retourne page 404 Google au lieu d'atteindre l'app), mais service fonctionnel prouvé via endpoint racine.
+**Test catch-all (fonctionnel):**
 
-### Status des ressources - Phase 0.2 COMPLÈTE
+```bash
+curl -i -sS "${SVC_URL}/anything"
+```
 
-- ✅ Cloud Run service `svc-authz` déployé uniquement via Terraform
+**Résultat:**
+
+```
+HTTP/2 200
+x-powered-by: Express
+content-type: application/json; charset=utf-8
+date: Wed, 01 Oct 2025 08:01:20 GMT
+
+{"ok":true,"service":"svc-authz","endpoint":"catchall"}
+```
+
+**Status HTTP:** 200 ✅
+
+**Logs Cloud Run (preuve que /healthz n'atteint PAS l'app):**
+
+```
+svc-authz v6 listening on 8080
+REQ GET /anything
+REQ GET /
+```
+
+**Note:** Aucune ligne "REQ GET /healthz" dans les logs → /healthz n'atteint jamais Express, intercepté par Cloud Run.
+
+### Status des ressources - Phase 0.2 FINALE
+
+- ✅ Cloud Run service `svc-authz` déployé uniquement via Terraform (image v6)
 - ✅ Service accessible publiquement et répond HTTP 200 avec JSON structuré
 - ✅ Traffic allocation 100% latest revision forcée
-- ✅ Image final-fixed déployée avec service JavaScript pur
+- ✅ Catch-all endpoint fonctionnel (prouve que l'app reçoit le trafic)
+- ❌ **PROBLÈME /healthz:** Intercepté par Cloud Run, n'atteint jamais Express
 - ✅ Pub/Sub topic `ps-requests` créé
 - ✅ IAM invoker configuré pour `allUsers`
 - ✅ State Terraform stocké dans `gs://hp-dev-tfstate`
 - ✅ Aucun déploiement manuel utilisé (gcloud run deploy)
+
+**CONCLUSION:** Service déployé et fonctionnel via Terraform only. /healthz intercepté par infrastructure Cloud Run.
 
 ### Vérification des secrets
 
