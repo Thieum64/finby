@@ -9,31 +9,29 @@ permissions:
   contents: read
 env:
   PROJECT_ID: hyperush-dev-250930115246
+  PROJECT_NUMBER: 443512026283
   REGION: europe-west1
-  WORKLOAD_IDENTITY_PROVIDER: projects/443512026283/locations/global/workloadIdentityPools/github-pool/providers/github-provider
   DEPLOY_SA: deploy-sa@hyperush-dev-250930115246.iam.gserviceaccount.com
 jobs:
-  auth-smoke:
+  smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - id: auth
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Auth to GCP via WIF
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          workload_identity_provider: projects/${{ env.PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider
           service_account: ${{ env.DEPLOY_SA }}
-      - uses: google-github-actions/setup-gcloud@v2
+      - name: Install gcloud
+        uses: google-github-actions/setup-gcloud@v2
         with:
-          version: ">= 467.0.0"
-      - name: Show gcloud identity
-        run: |
-          gcloud auth list
-          gcloud config list
-      - name: Project access check
-        run: |
-          gcloud projects describe $PROJECT_ID --format="value(projectNumber)"
-          gcloud run services list --project "$PROJECT_ID" --region "$REGION" || true
-          gcloud artifacts repositories list --project "$PROJECT_ID" --location "$REGION" || true
-      - name: STS sanity
-        run: |
-          gcloud iam service-accounts describe "$DEPLOY_SA" --project "$PROJECT_ID" --format="value(email)"
+          project_id: ${{ env.PROJECT_ID }}
+      - name: Show identity
+        run: gcloud auth list
+      - name: Project check
+        run: gcloud projects describe $PROJECT_ID --format='value(projectNumber)'
+      - name: Cloud Run list
+        run: gcloud run services list --region=${{ env.REGION }} || true
+      - name: Artifact Registry list
+        run: gcloud artifacts repositories list --location=${{ env.REGION }} || true
