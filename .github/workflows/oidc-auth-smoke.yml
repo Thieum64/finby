@@ -1,0 +1,39 @@
+name: OIDC Auth Smoke (GCP)
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths: [".github/workflows/oidc-auth-smoke.yml"]
+permissions:
+  id-token: write
+  contents: read
+env:
+  PROJECT_ID: hyperush-dev-250930115246
+  REGION: europe-west1
+  WORKLOAD_IDENTITY_PROVIDER: projects/443512026283/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+  DEPLOY_SA: deploy-sa@hyperush-dev-250930115246.iam.gserviceaccount.com
+jobs:
+  auth-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.DEPLOY_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          version: ">= 467.0.0"
+      - name: Show gcloud identity
+        run: |
+          gcloud auth list
+          gcloud config list
+      - name: Project access check
+        run: |
+          gcloud projects describe $PROJECT_ID --format="value(projectNumber)"
+          gcloud run services list --project "$PROJECT_ID" --region "$REGION" || true
+          gcloud artifacts repositories list --project "$PROJECT_ID" --location "$REGION" || true
+      - name: STS sanity
+        run: |
+          gcloud iam service-accounts describe "$DEPLOY_SA" --project "$PROJECT_ID" --format="value(email)"
