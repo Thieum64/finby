@@ -74,13 +74,10 @@ server.get('/', async (request, _reply) => {
   };
 });
 
-server.get('/healthz', async (_request, _reply) => {
+server.get('/health', async (_request, _reply) => {
   return {
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    checks: {
-      service: 'ok',
-    },
+    ok: true,
+    service: 'svc-authz',
   };
 });
 
