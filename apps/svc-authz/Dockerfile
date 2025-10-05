@@ -1,46 +1,23 @@
-FROM node:20-alpine AS base
-
-FROM base AS deps
+FROM node:20-alpine AS deps
 WORKDIR /app
-
-# Copy package.json without workspace dependencies (build context is apps/svc-authz)
-COPY package-docker.json ./package.json
-
-# Install dependencies
+# on évite le workspace: on utilise le package-docker.json dédié
+COPY package-docker.json package.json
 RUN npm install
 
-FROM base AS builder
+FROM node:20-alpine AS build
 WORKDIR /app
-
-# Copy node_modules from deps stage
 COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+# build TS -> dist avec tsup
+RUN npx tsup
 
-# Copy service source code (build context is apps/svc-authz)
-COPY . ./
-
-# Build the service
-RUN npm run build
-
-FROM base AS runtime
+FROM node:20-alpine AS runtime
 WORKDIR /app
-
-# Create non-root user
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 --ingroup nodejs service
-
-# Copy built application
-COPY --from=builder --chown=service:nodejs /app/dist ./dist
-COPY --from=builder --chown=service:nodejs /app/package.json ./package.json
-
-# Install production dependencies only
-RUN npm install --omit=dev
-
-USER service
-
+# on réutilise node_modules du stage deps (simple et fiable pour Phase 0)
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+ENV NODE_ENV=production
 EXPOSE 8080
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
-
-CMD ["node", "dist/index.js"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -qO- http://localhost:8080/health || exit 1
+CMD ["node","dist/index.js"]
