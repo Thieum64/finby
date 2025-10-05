@@ -1,5 +1,6 @@
 name: svc-authz CI/CD (dev)
 on:
+  workflow_dispatch:
   push:
     branches: [ "main" ]
     paths:
@@ -36,6 +37,8 @@ jobs:
           TAG="${GITHUB_SHA::12}"
           FULL_IMAGE="${REPO}/${IMAGE_NAME}:${TAG}"
           gcloud builds submit --tag "${FULL_IMAGE}" .
+          BUILD_ID=$(gcloud builds list --format='value(ID)' --filter='createTime>=-5m' --limit=1)
+          echo "Cloud Build logs: $(gcloud builds describe $BUILD_ID --format='value(logUrl)')"
           echo "FULL_IMAGE=${FULL_IMAGE}" >> $GITHUB_ENV
       - name: Terraform init/plan/apply (dev)
         working-directory: ${{ env.TF_DIR }}
