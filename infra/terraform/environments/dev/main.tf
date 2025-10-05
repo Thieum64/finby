@@ -54,11 +54,27 @@ module "logging" {
   enable_error_sink = var.enable_error_sink
 }
 
-# Cloud Run Services are managed by individual deployment jobs
-# This ensures Docker images are built before services are deployed
+# Cloud Run Services
+module "svc_authz" {
+  source = "../../modules/cloud_run_service"
 
-# Service URLs (managed by individual deployment jobs)
-# Each deployment job will handle its own service creation and URL output
+  name       = "svc-authz"
+  location   = var.region
+  project_id = var.project_id
+  image      = var.svc_authz_image
+
+  runtime_service_account = "svc-authz-sa@${var.project_id}.iam.gserviceaccount.com"
+
+  cpu                     = "1"
+  memory                  = "1Gi"
+  min_instances          = 0
+  max_instances          = 10
+  container_concurrency  = 80
+  port                   = 8080
+  ingress                = "INGRESS_TRAFFIC_ALL"
+  execution_environment  = "EXECUTION_ENVIRONMENT_GEN2"
+  enable_public_invoker  = true
+}
 
 # Infrastructure outputs
 output "pubsub_topics" {
@@ -95,4 +111,9 @@ output "project_info" {
     project_number = data.google_project.project.number
     region         = var.region
   }
+}
+
+output "svc_authz_url" {
+  description = "URL of the svc-authz service"
+  value       = module.svc_authz.service_url
 }

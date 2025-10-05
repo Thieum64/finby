@@ -31,3 +31,9 @@ variable "enable_error_sink" {
   default     = false
 }
 
+variable "svc_authz_image" {
+  description = "Docker image for svc-authz service"
+  type        = string
+  default     = ""
+}
+

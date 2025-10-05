@@ -15,7 +15,7 @@ env:
   REGION: europe-west1
   REPO: europe-west1-docker.pkg.dev/hyperush-dev-250930115246/hp-dev
   IMAGE_NAME: svc-authz
-  TF_DIR: infra/terraform/envs/dev
+  TF_DIR: infra/terraform/environments/dev
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
