@@ -4,8 +4,8 @@ RUN corepack enable pnpm
 FROM base AS deps
 WORKDIR /app
 
-# Copy package.json (build context is apps/svc-authz)
-COPY package.json ./package.json
+# Copy package.json without workspace dependencies (build context is apps/svc-authz)
+COPY package-docker.json ./package.json
 
 # Create minimal pnpm-workspace.yaml for this build context
 RUN echo 'packages: []' > pnpm-workspace.yaml

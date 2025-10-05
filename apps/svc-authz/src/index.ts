@@ -1,10 +1,6 @@
-import { initOTel } from '@hyperush/lib-otel';
 import fastify from 'fastify';
 import { ulid } from 'ulid';
 import { z } from 'zod';
-
-// Initialize OpenTelemetry first
-initOTel('svc-authz');
 
 // Environment validation (NOTE: PORT is provided by Cloud Run, never set manually)
 const envSchema = z.object({
