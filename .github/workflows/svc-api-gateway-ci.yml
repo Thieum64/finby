@@ -51,7 +51,10 @@ jobs:
         run: |
           terraform --version
           terraform init -input=false
-          terraform plan -input=false -out=tfplan -var="svc_api_gateway_image=${FULL_IMAGE}"
+          # Get current svc-authz image from existing deployment
+          CURRENT_AUTHZ_IMAGE=$(gcloud run services describe svc-authz --region=${{ env.REGION }} --format="value(spec.template.spec.template.spec.containers[0].image)" --project=${{ env.PROJECT_ID }} || echo "europe-west1-docker.pkg.dev/hyperush-dev-250930115246/hp-dev/svc-authz:9f8c22dbb299")
+          echo "Using current svc-authz image: ${CURRENT_AUTHZ_IMAGE}"
+          terraform plan -input=false -out=tfplan -var="svc_api_gateway_image=${FULL_IMAGE}" -var="svc_authz_image=${CURRENT_AUTHZ_IMAGE}"
           terraform apply -input=false -auto-approve tfplan
       - name: Smoke test /health & E2E trace test
         working-directory: ${{ env.TF_DIR }}
