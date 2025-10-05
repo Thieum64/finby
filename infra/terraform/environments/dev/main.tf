@@ -31,31 +31,25 @@ data "google_project" "project" {
 # Access via data source if needed by applications
 
 # Infrastructure modules
-# Disable pubsub module temporarily for Phase 0
-# module "pubsub" {
-#   source = "../../modules/pubsub"
-#
-#   project_id  = var.project_id
-#   environment = "dev"
-# }
+module "pubsub" {
+  source      = "../../modules/pubsub"
+  project_id  = var.project_id
+  environment = "dev"
+}
 
-# Disable secrets module temporarily for Phase 0
-# module "secrets" {
-#   source = "../../modules/secrets"
-#
-#   project_id  = var.project_id
-#   environment = "dev"
-# }
+module "secrets" {
+  source      = "../../modules/secrets"
+  project_id  = var.project_id
+  environment = "dev"
+}
 
-# Disable logging module temporarily for Phase 0 (needs serviceusage.services.create permission)
-# module "logging" {
-#   source = "../../modules/logging"
-#
-#   project_id        = var.project_id
-#   environment       = "dev"
-#   enable_metrics    = var.enable_metrics
-#   enable_error_sink = var.enable_error_sink
-# }
+module "logging" {
+  source = "../../modules/logging"
+  project_id        = var.project_id
+  environment       = "dev"
+  enable_metrics    = var.enable_metrics
+  enable_error_sink = var.enable_error_sink
+}
 
 # Cloud Run Services
 module "svc_authz" {
@@ -80,35 +74,32 @@ module "svc_authz" {
 }
 
 # Infrastructure outputs
-# Disabled for Phase 0
-# output "pubsub_topics" {
-#   description = "Created Pub/Sub topics"
-#   value       = module.pubsub.topics
-# }
+output "pubsub_topics" {
+  description = "Created Pub/Sub topics"
+  value       = module.pubsub.topics
+}
 
-# output "pubsub_subscriptions" {
-#   description = "Created Pub/Sub subscriptions"
-#   value       = module.pubsub.subscriptions
-# }
+output "pubsub_subscriptions" {
+  description = "Created Pub/Sub subscriptions"
+  value       = module.pubsub.subscriptions
+}
 
-# Disabled for Phase 0
-# output "secrets" {
-#   description = "Created secrets"
-#   value       = module.secrets.secrets
-# }
+output "secrets" {
+  description = "Created secrets"
+  value       = module.secrets.secrets
+}
 
-# Disabled for Phase 0
-# output "logging_metrics" {
-#   description = "Created log-based metrics"
-#   value       = module.logging.metrics
-# }
+output "logging_metrics" {
+  description = "Created log-based metrics"
+  value       = module.logging.metrics
+}
 
 # Firestore outputs removed - not managed by Terraform
 
-# output "enabled_apis" {
-#   description = "List of enabled APIs"
-#   value       = module.logging.enabled_apis
-# }
+output "enabled_apis" {
+  description = "List of enabled APIs"
+  value       = module.logging.enabled_apis
+}
 
 output "project_info" {
   description = "Project information"
