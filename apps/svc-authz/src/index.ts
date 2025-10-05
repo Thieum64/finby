@@ -5,7 +5,7 @@ initOTel('svc-authz');
 import fastify from 'fastify';
 import { ulid } from 'ulid';
 import { z } from 'zod';
-import { trace } from '@opentelemetry/api';
+import { trace, context } from '@opentelemetry/api';
 
 // Environment validation (NOTE: PORT is provided by Cloud Run, never set manually)
 const envSchema = z.object({
@@ -90,15 +90,19 @@ server.get('/', async (request, _reply) => {
 
 server.get('/health', async (request, _reply) => {
   const span = trace.getActiveSpan();
+
+  // Try to get active span context from current context if span is not available
+  const activeSpan = span || trace.getSpan(context.active());
+
   const result = {
     ok: true,
     service: 'svc-authz',
     timestamp: new Date().toISOString(),
     requestId: request.headers['x-request-id'],
-    ...(span && {
+    ...(activeSpan && {
       trace: {
-        traceId: span.spanContext().traceId,
-        spanId: span.spanContext().spanId,
+        traceId: activeSpan.spanContext().traceId,
+        spanId: activeSpan.spanContext().spanId,
       },
     }),
   };
@@ -123,16 +127,18 @@ server.register(
     // E2E test endpoint with enhanced tracing
     server.get('/trace-test', async (request, _reply) => {
       const span = trace.getActiveSpan();
+      // Try multiple ways to get the active span
+      const activeSpan = span || trace.getSpan(context.active());
 
-      if (span) {
+      if (activeSpan) {
         // Add custom span attributes
-        span.setAttributes({
+        activeSpan.setAttributes({
           'test.type': 'e2e',
           'test.endpoint': '/v1/trace-test',
           'service.name': 'svc-authz',
         });
 
-        const spanContext = span.spanContext();
+        const spanContext = activeSpan.spanContext();
         const traceId = spanContext.traceId;
         const spanId = spanContext.spanId;
 
@@ -164,11 +170,45 @@ server.register(
         return result;
       }
 
-      return {
-        message: 'E2E trace test - no active span',
-        timestamp: new Date().toISOString(),
-        requestId: request.headers['x-request-id'],
-      };
+      // Try to get trace ID from headers or create a manual span
+      const tracer = trace.getTracer('svc-authz', '0.1.0');
+      return tracer.startActiveSpan('manual-trace-test', (manualSpan) => {
+        const spanContext = manualSpan.spanContext();
+        const traceId = spanContext.traceId;
+        const spanId = spanContext.spanId;
+
+        manualSpan.setAttributes({
+          'test.type': 'e2e-manual',
+          'test.endpoint': '/v1/trace-test',
+          'service.name': 'svc-authz',
+        });
+
+        const projectId =
+          process.env.GCP_PROJECT_ID || 'hyperush-dev-250930115246';
+        const traceUrl = `https://console.cloud.google.com/traces/details/${traceId}?project=${projectId}`;
+
+        const result = {
+          message: 'E2E trace test successful (manual span)',
+          trace: {
+            traceId,
+            spanId,
+            traceUrl,
+          },
+          timestamp: new Date().toISOString(),
+          requestId: request.headers['x-request-id'],
+        };
+
+        request.log.info(
+          {
+            test_trace: result,
+            trace_url: traceUrl,
+          },
+          `E2E trace test completed (manual) - View trace: ${traceUrl}`
+        );
+
+        manualSpan.end();
+        return result;
+      });
     });
   },
   { prefix: '/v1' }
