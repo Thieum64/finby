@@ -1,17 +1,20 @@
+// Initialize OpenTelemetry BEFORE any other imports
+import { initOTel } from './otel';
+initOTel('svc-authz');
+
 import fastify from 'fastify';
 import { ulid } from 'ulid';
 import { z } from 'zod';
+import { trace } from '@opentelemetry/api';
 
 // Environment validation (NOTE: PORT is provided by Cloud Run, never set manually)
 const envSchema = z.object({
-  NODE_ENV: z
-    .enum(['development', 'production', 'test'])
-    .default('production'),
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('production'),
   PORT: z.coerce.number().default(8080),
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
     .default('info'),
-  GCP_PROJECT_ID: z.string().optional(),
+  GCP_PROJECT_ID: z.string().default('hyperush-dev-250930115246'),
 });
 
 const env = envSchema.parse(process.env);
@@ -19,14 +22,40 @@ const env = envSchema.parse(process.env);
 const server = fastify({
   logger: {
     level: env.LOG_LEVEL,
+    // JSON logs for production, pretty for development
+    ...(env.NODE_ENV === 'production'
+      ? {}
+      : { transport: { target: 'pino-pretty' } }),
   },
+  // Automatically generate request ID if not provided
+  genReqId: () => ulid(),
 });
 
-// Global request ID middleware
+// Global request ID and tracing middleware
 server.addHook('onRequest', async (request, reply) => {
-  const reqId = (request.headers['x-request-id'] as string) || ulid();
+  // Handle request ID
+  const reqId =
+    (request.headers['x-request-id'] as string) || request.id || ulid();
   request.headers['x-request-id'] = reqId;
   reply.header('x-request-id', reqId);
+
+  // Get current span and add trace context to logs
+  const span = trace.getActiveSpan();
+  if (span) {
+    const spanContext = span.spanContext();
+    const traceId = spanContext.traceId;
+    const spanId = spanContext.spanId;
+
+    // Add trace context to request for logging
+    request.log = request.log.child({
+      trace_id: traceId,
+      span_id: spanId,
+    });
+
+    // Add W3C traceparent header to response for client tracing
+    const traceparent = `00-${traceId}-${spanId}-01`;
+    reply.header('traceparent', traceparent);
+  }
 });
 
 // Register plugins function
@@ -59,11 +88,25 @@ server.get('/', async (request, _reply) => {
   };
 });
 
-server.get('/health', async (_request, _reply) => {
-  return {
+server.get('/health', async (request, _reply) => {
+  const span = trace.getActiveSpan();
+  const result = {
     ok: true,
     service: 'svc-authz',
+    timestamp: new Date().toISOString(),
+    requestId: request.headers['x-request-id'],
+    ...(span && {
+      trace: {
+        traceId: span.spanContext().traceId,
+        spanId: span.spanContext().spanId,
+      },
+    }),
   };
+
+  // Log health check with trace context
+  request.log.info({ health_check: result }, 'Health check performed');
+
+  return result;
 });
 
 // v1 API namespace (future endpoints)
@@ -75,6 +118,57 @@ server.register(
 
     server.get('/ping', async () => {
       return { message: 'AuthZ service v1 API' };
+    });
+
+    // E2E test endpoint with enhanced tracing
+    server.get('/trace-test', async (request, _reply) => {
+      const span = trace.getActiveSpan();
+
+      if (span) {
+        // Add custom span attributes
+        span.setAttributes({
+          'test.type': 'e2e',
+          'test.endpoint': '/v1/trace-test',
+          'service.name': 'svc-authz',
+        });
+
+        const spanContext = span.spanContext();
+        const traceId = spanContext.traceId;
+        const spanId = spanContext.spanId;
+
+        // Create trace URL for Cloud Trace
+        const projectId =
+          process.env.GCP_PROJECT_ID || 'hyperush-dev-250930115246';
+        const traceUrl = `https://console.cloud.google.com/traces/details/${traceId}?project=${projectId}`;
+
+        const result = {
+          message: 'E2E trace test successful',
+          trace: {
+            traceId,
+            spanId,
+            traceUrl,
+          },
+          timestamp: new Date().toISOString(),
+          requestId: request.headers['x-request-id'],
+        };
+
+        // Log with trace URL for CI verification
+        request.log.info(
+          {
+            test_trace: result,
+            trace_url: traceUrl,
+          },
+          `E2E trace test completed - View trace: ${traceUrl}`
+        );
+
+        return result;
+      }
+
+      return {
+        message: 'E2E trace test - no active span',
+        timestamp: new Date().toISOString(),
+        requestId: request.headers['x-request-id'],
+      };
     });
   },
   { prefix: '/v1' }

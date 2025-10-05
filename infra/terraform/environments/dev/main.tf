@@ -62,6 +62,12 @@ module "svc_authz" {
 
   runtime_service_account = "svc-authz-sa@${var.project_id}.iam.gserviceaccount.com"
 
+  env_vars = {
+    GCP_PROJECT_ID = var.project_id
+    NODE_ENV       = "production"
+    LOG_LEVEL      = "info"
+  }
+
   cpu                     = "1"
   memory                  = "1Gi"
   min_instances          = 0

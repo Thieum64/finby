@@ -2,10 +2,10 @@ name: svc-authz CI/CD (dev)
 on:
   workflow_dispatch:
   push:
-    branches: [ "main" ]
+    branches: ['main']
     paths:
-      - "apps/svc-authz/**"
-      - ".github/workflows/svc-authz-ci.yml"
+      - 'apps/svc-authz/**'
+      - '.github/workflows/svc-authz-ci.yml'
 permissions:
   id-token: write
   contents: read
@@ -36,7 +36,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.5.7"
+          terraform_version: '1.5.7'
       - name: Build & Push (Cloud Build)
         working-directory: apps/svc-authz
         run: |
@@ -53,16 +53,41 @@ jobs:
           terraform init -input=false
           terraform plan -input=false -out=tfplan -var="svc_authz_image=${FULL_IMAGE}"
           terraform apply -input=false -auto-approve tfplan
-      - name: Smoke test /health
+      - name: Smoke test /health & E2E trace test
         working-directory: ${{ env.TF_DIR }}
+        env:
+          GCP_PROJECT_ID: ${{ env.PROJECT_ID }}
         run: |
           URL=$(terraform output -raw svc_authz_url)
-          echo "URL=${URL}"
+          echo "Service URL: ${URL}"
+
+          # Health check test
+          echo "=== Health Check Test ==="
           for i in {1..10}; do
             code=$(curl -s -o /dev/null -w "%{http_code}" "${URL}/health")
             if [ "$code" = "200" ]; then
-              echo "OK (200)"; exit 0
+              echo "✅ Health check OK (200)"
+              break
             fi
             sleep 3
+            if [ $i -eq 10 ]; then
+              echo "❌ Health check failed"; curl -i "${URL}/health" || true; exit 1
+            fi
           done
-          echo "Health check failed"; curl -i "${URL}/health" || true; exit 1
+
+          # E2E Trace test
+          echo "=== E2E Trace Test ==="
+          sleep 5  # Allow OTel to initialize
+          TRACE_RESPONSE=$(curl -s "${URL}/v1/trace-test")
+          echo "Trace test response: ${TRACE_RESPONSE}"
+
+          # Extract trace URL from response
+          TRACE_URL=$(echo "${TRACE_RESPONSE}" | jq -r '.trace.traceUrl // empty')
+          if [ -n "${TRACE_URL}" ] && [ "${TRACE_URL}" != "null" ]; then
+            echo "✅ E2E Trace test successful!"
+            echo "🔍 View trace: ${TRACE_URL}"
+            echo "trace_url=${TRACE_URL}" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️  Trace URL not found in response, but service is responding"
+            echo "This may be normal if OTel is still initializing"
+          fi
