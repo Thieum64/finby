@@ -37,3 +37,9 @@ variable "svc_authz_image" {
   default     = ""
 }
 
+variable "svc_api_gateway_image" {
+  description = "Docker image for svc-api-gateway service"
+  type        = string
+  default     = ""
+}
+

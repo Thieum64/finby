@@ -79,6 +79,35 @@ module "svc_authz" {
   enable_public_invoker  = true
 }
 
+# API Gateway Service
+module "svc_api_gateway" {
+  source = "../../modules/cloud_run_service"
+
+  name       = "svc-api-gateway"
+  location   = var.region
+  project_id = var.project_id
+  image      = var.svc_api_gateway_image
+
+  runtime_service_account = "svc-api-gateway-sa@${var.project_id}.iam.gserviceaccount.com"
+
+  env_vars = {
+    GCP_PROJECT_ID = var.project_id
+    NODE_ENV       = "production"
+    LOG_LEVEL      = "info"
+    SVC_AUTHZ_URL  = module.svc_authz.service_url
+  }
+
+  cpu                     = "1"
+  memory                  = "1Gi"
+  min_instances          = 0
+  max_instances          = 10
+  container_concurrency  = 80
+  port                   = 8080
+  ingress                = "INGRESS_TRAFFIC_ALL"
+  execution_environment  = "EXECUTION_ENVIRONMENT_GEN2"
+  enable_public_invoker  = true
+}
+
 # Infrastructure outputs
 output "pubsub_topics" {
   description = "Created Pub/Sub topics"
@@ -119,4 +148,9 @@ output "project_info" {
 output "svc_authz_url" {
   description = "URL of the svc-authz service"
   value       = module.svc_authz.service_url
+}
+
+output "svc_api_gateway_url" {
+  description = "URL of the svc-api-gateway service"
+  value       = module.svc_api_gateway.service_url
 }
