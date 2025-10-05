@@ -1,5 +1,4 @@
 FROM node:20-alpine AS base
-RUN corepack enable pnpm
 
 FROM base AS deps
 WORKDIR /app
@@ -7,11 +6,8 @@ WORKDIR /app
 # Copy package.json without workspace dependencies (build context is apps/svc-authz)
 COPY package-docker.json ./package.json
 
-# Create minimal pnpm-workspace.yaml for this build context
-RUN echo 'packages: []' > pnpm-workspace.yaml
-
 # Install dependencies
-RUN pnpm install
+RUN npm install
 
 FROM base AS builder
 WORKDIR /app
@@ -23,7 +19,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . ./
 
 # Build the service
-RUN pnpm build
+RUN npm run build
 
 FROM base AS runtime
 WORKDIR /app
@@ -37,7 +33,7 @@ COPY --from=builder --chown=service:nodejs /app/dist ./dist
 COPY --from=builder --chown=service:nodejs /app/package.json ./package.json
 
 # Install production dependencies only
-RUN pnpm install --prod
+RUN npm install --omit=dev
 
 USER service
 
