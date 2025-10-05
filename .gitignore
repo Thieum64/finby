@@ -89,6 +89,8 @@ Thumbs.db
 *.json
 !**/openapi/*.json
 !**/contracts/*.json
+!**/package*.json
+!**/tsconfig*.json
 
 # Local development
 .env.development
