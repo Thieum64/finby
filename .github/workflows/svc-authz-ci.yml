@@ -31,6 +31,10 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ env.PROJECT_ID }}
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.7"
       - name: Build & Push (Cloud Build)
         working-directory: apps/svc-authz
         run: |
