@@ -4,26 +4,26 @@ RUN corepack enable pnpm
 FROM base AS deps
 WORKDIR /app
 
-# Copy package.json from service directory (simplified approach for Phase 0)
-COPY apps/svc-authz/package.json ./package.json
+# Copy package.json (build context is apps/svc-authz)
+COPY package.json ./package.json
 
 # Create minimal pnpm-workspace.yaml for this build context
 RUN echo 'packages: []' > pnpm-workspace.yaml
 
-# Install dependencies  
+# Install dependencies
 RUN pnpm install
 
-FROM base AS builder  
+FROM base AS builder
 WORKDIR /app
 
 # Copy node_modules from deps stage
 COPY --from=deps /app/node_modules ./node_modules
 
-# Copy service source code
-COPY apps/svc-authz ./apps/svc-authz
+# Copy service source code (build context is apps/svc-authz)
+COPY . ./
 
 # Build the service
-RUN cd apps/svc-authz && pnpm install && pnpm build
+RUN pnpm build
 
 FROM base AS runtime
 WORKDIR /app
@@ -33,8 +33,8 @@ RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 --ingroup nodejs service
 
 # Copy built application
-COPY --from=builder --chown=service:nodejs /app/apps/svc-authz/dist ./dist
-COPY --from=builder --chown=service:nodejs /app/apps/svc-authz/package.json ./package.json
+COPY --from=builder --chown=service:nodejs /app/dist ./dist
+COPY --from=builder --chown=service:nodejs /app/package.json ./package.json
 
 # Install production dependencies only
 RUN pnpm install --prod
