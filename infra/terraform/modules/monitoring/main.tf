@@ -36,6 +36,7 @@ resource "google_monitoring_dashboard" "overview" {
   dashboard_json = jsonencode({
     displayName = "HyperRush ${var.environment} - Overview"
     mosaicLayout = {
+      columns = 12
       tiles = [
         {
           width = 6
@@ -47,7 +48,7 @@ resource "google_monitoring_dashboard" "overview" {
                 {
                   timeSeriesQuery = {
                     timeSeriesFilter = {
-                      filter = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=~\"${join("|", var.services)}\""
+                      filter = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"svc-authz\""
                       aggregation = {
                         alignmentPeriod = "60s"
                         perSeriesAligner = "ALIGN_RATE"
@@ -79,7 +80,7 @@ resource "google_monitoring_dashboard" "overview" {
                 {
                   timeSeriesQuery = {
                     timeSeriesFilter = {
-                      filter = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=~\"${join("|", var.services)}\" AND response_code_class=\"4xx\" OR response_code_class=\"5xx\""
+                      filter = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"svc-authz\" AND (response_code_class=\"4xx\" OR response_code_class=\"5xx\")"
                       aggregation = {
                         alignmentPeriod = "60s"
                         perSeriesAligner = "ALIGN_RATE"
@@ -111,7 +112,7 @@ resource "google_monitoring_dashboard" "overview" {
                 {
                   timeSeriesQuery = {
                     timeSeriesFilter = {
-                      filter = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=~\"${join("|", var.services)}\" AND metric.type=\"run.googleapis.com/container/cpu/utilizations\""
+                      filter = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"svc-authz\" AND metric.type=\"run.googleapis.com/container/cpu/utilizations\""
                       aggregation = {
                         alignmentPeriod = "60s"
                         perSeriesAligner = "ALIGN_MEAN"
@@ -144,7 +145,7 @@ resource "google_monitoring_dashboard" "overview" {
                 {
                   timeSeriesQuery = {
                     timeSeriesFilter = {
-                      filter = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=~\"${join("|", var.services)}\" AND metric.type=\"run.googleapis.com/container/memory/utilizations\""
+                      filter = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"svc-authz\" AND metric.type=\"run.googleapis.com/container/memory/utilizations\""
                       aggregation = {
                         alignmentPeriod = "60s"
                         perSeriesAligner = "ALIGN_MEAN"
@@ -179,6 +180,7 @@ resource "google_monitoring_dashboard" "traces_logs" {
   dashboard_json = jsonencode({
     displayName = "HyperRush ${var.environment} - Traces & Logs"
     mosaicLayout = {
+      columns = 12
       tiles = [
         {
           width = 12
@@ -221,7 +223,7 @@ resource "google_monitoring_dashboard" "traces_logs" {
                 {
                   timeSeriesQuery = {
                     timeSeriesFilter = {
-                      filter = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=~\"${join("|", var.services)}\""
+                      filter = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"svc-authz\""
                       aggregation = {
                         alignmentPeriod = "60s"
                         perSeriesAligner = "ALIGN_RATE"
@@ -254,7 +256,7 @@ resource "google_monitoring_dashboard" "traces_logs" {
                 {
                   timeSeriesQuery = {
                     timeSeriesFilter = {
-                      filter = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=~\"${join("|", var.services)}\" AND (severity>=ERROR OR jsonPayload.level=\"ERROR\")"
+                      filter = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"svc-authz\" AND (severity>=ERROR OR jsonPayload.level=\"ERROR\")"
                       aggregation = {
                         alignmentPeriod = "60s"
                         perSeriesAligner = "ALIGN_RATE"
@@ -293,9 +295,9 @@ resource "google_monitoring_alert_policy" "high_error_rate" {
     display_name = "High HTTP error rate"
 
     condition_threshold {
-      filter         = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=~\"${join("|", var.services)}\" AND (response_code_class=\"4xx\" OR response_code_class=\"5xx\")"
+      filter         = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"svc-authz\" AND (response_code_class=\"4xx\" OR response_code_class=\"5xx\")"
       duration       = "300s"
-      comparison     = "COMPARISON_GREATER_THAN"
+      comparison     = "COMPARISON_GT"
       threshold_value = 10
 
       aggregations {
@@ -331,7 +333,7 @@ resource "google_monitoring_alert_policy" "service_down" {
     display_name = "No requests for 5 minutes"
 
     condition_absent {
-      filter   = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=~\"${join("|", var.services)}\""
+      filter   = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"svc-authz\""
       duration = "300s"
 
       aggregations {
@@ -367,9 +369,9 @@ resource "google_monitoring_alert_policy" "high_cpu" {
     display_name = "CPU utilization > 80%"
 
     condition_threshold {
-      filter         = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=~\"${join("|", var.services)}\" AND metric.type=\"run.googleapis.com/container/cpu/utilizations\""
+      filter         = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"svc-authz\" AND metric.type=\"run.googleapis.com/container/cpu/utilizations\""
       duration       = "300s"
-      comparison     = "COMPARISON_GREATER_THAN"
+      comparison     = "COMPARISON_GT"
       threshold_value = 0.8
 
       aggregations {
@@ -431,7 +433,7 @@ resource "google_logging_metric" "request_latency" {
 
   filter = <<-EOF
     resource.type="cloud_run_revision"
-    resource.labels.service_name=~"${join("|", var.services)}"
+    resource.labels.service_name=\"svc-authz\"
     httpRequest.latency!=""
   EOF
 
@@ -441,6 +443,16 @@ resource "google_logging_metric" "request_latency" {
     metric_kind = "GAUGE"
     value_type  = "DISTRIBUTION"
     display_name = "HyperRush Request Latency"
+    labels {
+      key         = "service"
+      value_type  = "STRING"
+      description = "Cloud Run service name"
+    }
+    labels {
+      key         = "method"
+      value_type  = "STRING"
+      description = "HTTP request method"
+    }
   }
 
   label_extractors = {
@@ -476,6 +488,16 @@ resource "google_logging_metric" "job_processing_count" {
     metric_kind = "GAUGE"
     value_type  = "INT64"
     display_name = "HyperRush Job Processing Count"
+    labels {
+      key         = "job_type"
+      value_type  = "STRING"
+      description = "Type of job being processed"
+    }
+    labels {
+      key         = "status"
+      value_type  = "STRING"
+      description = "Job processing status"
+    }
   }
 
   label_extractors = {
