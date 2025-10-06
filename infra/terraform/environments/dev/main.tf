@@ -30,23 +30,15 @@ data "google_project" "project" {
 # Current production state: location_id=eur3, pitr=disabled
 # Access via data source if needed by applications
 
-# Infrastructure modules
-module "service_accounts" {
-  source     = "../../modules/service_accounts"
-  project_id = var.project_id
+# Use existing service accounts
+data "google_service_account" "svc_authz_sa" {
+  account_id = "svc-authz-sa"
+  project    = var.project_id
+}
 
-  service_accounts = [
-    {
-      name         = "svc-authz-sa"
-      display_name = "AuthZ Service Account"
-      description  = "Service account for svc-authz Cloud Run service"
-    },
-    {
-      name         = "svc-api-gateway-sa"
-      display_name = "API Gateway Service Account"
-      description  = "Service account for svc-api-gateway Cloud Run service"
-    }
-  ]
+data "google_service_account" "svc_api_gateway_sa" {
+  account_id = "svc-api-gateway-sa"
+  project    = var.project_id
 }
 
 module "pubsub" {
@@ -78,7 +70,7 @@ module "svc_authz" {
   project_id = var.project_id
   image      = var.svc_authz_image
 
-  runtime_service_account = module.service_accounts.service_account_emails["svc-authz-sa"]
+  runtime_service_account = data.google_service_account.svc_authz_sa.email
 
   env_vars = {
     GCP_PROJECT_ID = var.project_id
@@ -106,7 +98,7 @@ module "svc_api_gateway" {
   project_id = var.project_id
   image      = var.svc_api_gateway_image
 
-  runtime_service_account = module.service_accounts.service_account_emails["svc-api-gateway-sa"]
+  runtime_service_account = data.google_service_account.svc_api_gateway_sa.email
 
   env_vars = {
     GCP_PROJECT_ID = var.project_id
