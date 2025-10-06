@@ -61,6 +61,26 @@ module "logging" {
   enable_error_sink = var.enable_error_sink
 }
 
+module "monitoring" {
+  source      = "../../modules/monitoring"
+  project_id  = var.project_id
+  environment = "dev"
+
+  # Enable dashboards and alerts
+  enable_dashboards = var.enable_monitoring_dashboards
+  enable_alerts     = var.enable_monitoring_alerts
+
+  # Budget configuration
+  budget_amount     = var.monthly_budget_amount
+  budget_thresholds = var.budget_alert_thresholds
+
+  # Services to monitor
+  services = ["svc-authz", "svc-api-gateway", "worker-jobs"]
+
+  # Notification channels (empty for now, can be added later)
+  notification_channels = []
+}
+
 # Cloud Run Services
 module "svc_authz" {
   source = "../../modules/cloud_run_service"
@@ -163,4 +183,25 @@ output "svc_authz_url" {
 output "svc_api_gateway_url" {
   description = "URL of the svc-api-gateway service"
   value       = module.svc_api_gateway.service_url
+}
+
+# Monitoring outputs
+output "monitoring_dashboard_urls" {
+  description = "URLs of monitoring dashboards"
+  value       = module.monitoring.dashboard_urls
+}
+
+output "monitoring_alert_policies" {
+  description = "Created alert policy IDs"
+  value       = module.monitoring.alert_policy_ids
+}
+
+output "monitoring_console_url" {
+  description = "Google Cloud Monitoring console URL"
+  value       = module.monitoring.monitoring_console_url
+}
+
+output "budget_name" {
+  description = "Budget name for cost monitoring"
+  value       = module.monitoring.budget_name
 }

@@ -43,3 +43,28 @@ variable "svc_api_gateway_image" {
   default     = ""
 }
 
+# Monitoring variables
+variable "enable_monitoring_dashboards" {
+  description = "Enable creation of monitoring dashboards"
+  type        = bool
+  default     = true
+}
+
+variable "enable_monitoring_alerts" {
+  description = "Enable creation of alerting policies"
+  type        = bool
+  default     = true
+}
+
+variable "monthly_budget_amount" {
+  description = "Monthly budget amount in USD"
+  type        = number
+  default     = 100
+}
+
+variable "budget_alert_thresholds" {
+  description = "Budget alert thresholds (percentages)"
+  type        = list(number)
+  default     = [50, 80, 100]
+}
+
