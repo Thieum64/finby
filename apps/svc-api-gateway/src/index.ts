@@ -76,13 +76,6 @@ const registerPlugins = async () => {
     max: 100,
     timeWindow: '1 minute',
   });
-
-  // Register HTTP proxy for microservices routing
-  await server.register(import('@fastify/http-proxy'), {
-    upstream: '',
-    prefix: '',
-    rewritePrefix: '',
-  });
 };
 
 // Health check endpoints
