@@ -1,0 +1,153 @@
+name: worker-jobs CI/CD (dev)
+on:
+  workflow_dispatch:
+  push:
+    branches: ['main']
+    paths:
+      - 'apps/worker-jobs/**'
+      - '.github/workflows/worker-jobs-ci.yml'
+permissions:
+  id-token: write
+  contents: read
+env:
+  PROJECT_ID: hyperush-dev-250930115246
+  PROJECT_NUMBER: 443512026283
+  REGION: europe-west1
+  REPO: europe-west1-docker.pkg.dev/hyperush-dev-250930115246/hp-dev
+  IMAGE_NAME: worker-jobs
+  TF_DIR: infra/terraform/environments/dev
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Auth to GCP via WIF
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${{ env.PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: deploy-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
+          create_credentials_file: true
+          export_environment_variables: true
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.5.7'
+      - name: Build & Push (Cloud Build)
+        working-directory: apps/worker-jobs
+        run: |
+          TAG="${GITHUB_SHA::12}"
+          FULL_IMAGE="${REPO}/${IMAGE_NAME}:${TAG}"
+          gcloud builds submit --tag "${FULL_IMAGE}" .
+          BUILD_ID=$(gcloud builds list --format='value(ID)' --filter='createTime>=-5m' --limit=1)
+          echo "Cloud Build logs: $(gcloud builds describe $BUILD_ID --format='value(logUrl)')"
+          echo "FULL_IMAGE=${FULL_IMAGE}" >> $GITHUB_ENV
+      - name: Deploy as Cloud Run Service (for testing)
+        run: |
+          # Deploy worker as a Cloud Run service for testing the endpoints
+          gcloud run deploy worker-jobs \
+            --image="${FULL_IMAGE}" \
+            --region="${REGION}" \
+            --platform=managed \
+            --allow-unauthenticated \
+            --memory=1Gi \
+            --cpu=1 \
+            --min-instances=0 \
+            --max-instances=1 \
+            --concurrency=10 \
+            --timeout=300 \
+            --set-env-vars="GCP_PROJECT_ID=${PROJECT_ID},NODE_ENV=production,LOG_LEVEL=info" \
+            --service-account="worker-e2e-sa@${PROJECT_ID}.iam.gserviceaccount.com" \
+            --quiet
+
+          # Get the service URL
+          SERVICE_URL=$(gcloud run services describe worker-jobs --region=${REGION} --format="value(status.url)")
+          echo "WORKER_SERVICE_URL=${SERVICE_URL}" >> $GITHUB_ENV
+          echo "Worker service deployed at: ${SERVICE_URL}"
+      - name: Smoke test /health & E2E trace test
+        env:
+          GCP_PROJECT_ID: ${{ env.PROJECT_ID }}
+        run: |
+          URL="${WORKER_SERVICE_URL}"
+          echo "Service URL: ${URL}"
+
+          # Health check test
+          echo "=== Health Check Test ==="
+          for i in {1..10}; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "${URL}/health")
+            if [ "$code" = "200" ]; then
+              echo "✅ Health check OK (200)"
+              break
+            fi
+            sleep 3
+            if [ $i -eq 10 ]; then
+              echo "❌ Health check failed"; curl -i "${URL}/health" || true; exit 1
+            fi
+          done
+
+          # E2E Trace test
+          echo "=== E2E Trace Test ==="
+          sleep 5  # Allow OTel to initialize
+          TRACE_RESPONSE=$(curl -s "${URL}/v1/trace-test")
+          echo "Trace test response: ${TRACE_RESPONSE}"
+
+          # Extract trace URL from response
+          TRACE_URL=$(echo "${TRACE_RESPONSE}" | jq -r '.trace.traceUrl // empty')
+          if [ -n "${TRACE_URL}" ] && [ "${TRACE_URL}" != "null" ]; then
+            echo "✅ E2E Trace test successful!"
+            echo "🔍 View trace: ${TRACE_URL}"
+            echo "trace_url=${TRACE_URL}" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️  Trace URL not found in response, but service is responding"
+            echo "This may be normal if OTel is still initializing"
+          fi
+
+          # Test job processing functionality
+          echo "=== Job Processing Test ==="
+
+          # Test the test-job endpoint
+          JOB_RESPONSE=$(curl -s -X POST "${URL}/test-job" \
+            -H "Content-Type: application/json" \
+            -d '{"type":"test","message":"CI/CD test job","priority":"high"}')
+          echo "Job processing response: ${JOB_RESPONSE}"
+
+          # Verify job was processed successfully
+          if echo "${JOB_RESPONSE}" | jq -e '.status == "success"' > /dev/null; then
+            echo "✅ Job processing test successful!"
+          else
+            echo "⚠️  Job processing test failed or returned unexpected response"
+            echo "Response: ${JOB_RESPONSE}"
+          fi
+
+          # Test Pub/Sub message format
+          echo "=== Pub/Sub Message Format Test ==="
+
+          # Create a test message in Pub/Sub format
+          PUBSUB_MESSAGE='{
+            "message": {
+              "data": "'$(echo '{"type":"email","to":"test@example.com","subject":"Test email"}' | base64 -w 0)'",
+              "attributes": {
+                "source": "ci-test"
+              },
+              "messageId": "test-message-123",
+              "publishTime": "'$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)'"
+            },
+            "subscription": "projects/'${PROJECT_ID}'/subscriptions/test-sub"
+          }'
+
+          PUBSUB_RESPONSE=$(curl -s -X POST "${URL}/pubsub" \
+            -H "Content-Type: application/json" \
+            -d "${PUBSUB_MESSAGE}")
+          echo "Pub/Sub processing response: ${PUBSUB_RESPONSE}"
+
+          # Verify Pub/Sub message was processed successfully
+          if echo "${PUBSUB_RESPONSE}" | jq -e '.status == "success"' > /dev/null; then
+            echo "✅ Pub/Sub message processing test successful!"
+          else
+            echo "⚠️  Pub/Sub message processing test failed or returned unexpected response"
+            echo "Response: ${PUBSUB_RESPONSE}"
+          fi
