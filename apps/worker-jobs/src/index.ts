@@ -5,7 +5,7 @@ initOTel('worker-jobs');
 import fastify from 'fastify';
 import { ulid } from 'ulid';
 import { z } from 'zod';
-import { trace, context } from '@opentelemetry/api';
+import { trace, context, SpanStatusCode } from '@opentelemetry/api';
 
 // Environment validation
 const envSchema = z.object({
@@ -186,10 +186,10 @@ server.post('/pubsub', async (request, reply) => {
     await tracer.startActiveSpan('process-job', async (span) => {
       try {
         await processJob(jobData, messageId, request.log);
-        span.setStatus({ code: trace.SpanStatusCode.OK });
+        span.setStatus({ code: SpanStatusCode.OK });
       } catch (error) {
         span.setStatus({
-          code: trace.SpanStatusCode.ERROR,
+          code: SpanStatusCode.ERROR,
           message: error instanceof Error ? error.message : String(error),
         });
         throw error;
@@ -323,10 +323,10 @@ server.post('/test-job', async (request, reply) => {
     await tracer.startActiveSpan('test-job', async (span) => {
       try {
         await processJob(jobData, messageId, request.log);
-        span.setStatus({ code: trace.SpanStatusCode.OK });
+        span.setStatus({ code: SpanStatusCode.OK });
       } catch (error) {
         span.setStatus({
-          code: trace.SpanStatusCode.ERROR,
+          code: SpanStatusCode.ERROR,
           message: error instanceof Error ? error.message : String(error),
         });
         throw error;
