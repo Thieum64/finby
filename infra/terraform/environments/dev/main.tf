@@ -31,6 +31,24 @@ data "google_project" "project" {
 # Access via data source if needed by applications
 
 # Infrastructure modules
+module "service_accounts" {
+  source     = "../../modules/service_accounts"
+  project_id = var.project_id
+
+  service_accounts = [
+    {
+      name         = "svc-authz-sa"
+      display_name = "AuthZ Service Account"
+      description  = "Service account for svc-authz Cloud Run service"
+    },
+    {
+      name         = "svc-api-gateway-sa"
+      display_name = "API Gateway Service Account"
+      description  = "Service account for svc-api-gateway Cloud Run service"
+    }
+  ]
+}
+
 module "pubsub" {
   source      = "../../modules/pubsub"
   project_id  = var.project_id
@@ -60,7 +78,7 @@ module "svc_authz" {
   project_id = var.project_id
   image      = var.svc_authz_image
 
-  runtime_service_account = "svc-authz-sa@${var.project_id}.iam.gserviceaccount.com"
+  runtime_service_account = module.service_accounts.service_account_emails["svc-authz-sa"]
 
   env_vars = {
     GCP_PROJECT_ID = var.project_id
@@ -88,7 +106,7 @@ module "svc_api_gateway" {
   project_id = var.project_id
   image      = var.svc_api_gateway_image
 
-  runtime_service_account = "svc-api-gateway-sa@${var.project_id}.iam.gserviceaccount.com"
+  runtime_service_account = module.service_accounts.service_account_emails["svc-api-gateway-sa"]
 
   env_vars = {
     GCP_PROJECT_ID = var.project_id
