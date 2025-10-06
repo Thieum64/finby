@@ -102,11 +102,34 @@ jobs:
           STATUS_RESPONSE=$(curl -s "${URL}/api/v1/status")
           echo "Status response: ${STATUS_RESPONSE}"
 
-          # Test /auth/** routing to svc-authz (should proxy to authz service)
-          AUTH_HEALTH=$(curl -s "${URL}/auth/health" || echo "failed")
-          if [[ "$AUTH_HEALTH" == *"svc-authz"* ]]; then
-            echo "✅ API Gateway routing to /auth/** works!"
+          # Smoke test routed /api/v1/auth/health
+          echo "=== Smoke test routed /api/v1/auth/health ==="
+          AUTH_RESPONSE=$(curl -s -D /tmp/auth_headers "${URL}/api/v1/auth/health" || echo "failed")
+          echo "Auth health response: ${AUTH_RESPONSE}"
+
+          # Validate response contains svc-authz
+          if [[ "$AUTH_RESPONSE" == *"svc-authz"* ]]; then
+            echo "✅ API Gateway routing to /api/v1/auth/** works!"
+
+            # Extract traceparent header if present
+            TRACEPARENT=$(grep -i "traceparent:" /tmp/auth_headers | cut -d' ' -f2- | tr -d '\r' || echo "")
+            if [ -n "$TRACEPARENT" ]; then
+              TRACE_ID=$(echo "$TRACEPARENT" | cut -d- -f2)
+              echo "🔍 Trace ID from header: $TRACE_ID"
+              echo "🔍 Trace URL: https://console.cloud.google.com/traces/details/$TRACE_ID?project=$PROJECT_ID"
+            else
+              # Try to extract from response body
+              BODY_TRACE_ID=$(echo "$AUTH_RESPONSE" | jq -r '.trace.traceId // empty' 2>/dev/null || echo "")
+              if [ -n "$BODY_TRACE_ID" ]; then
+                echo "🔍 Trace ID from body: $BODY_TRACE_ID"
+                echo "🔍 Trace URL: https://console.cloud.google.com/traces/details/$BODY_TRACE_ID?project=$PROJECT_ID"
+              else
+                echo "⚠️  No trace information found in headers or body"
+              fi
+            fi
           else
-            echo "⚠️  API Gateway routing to /auth/** may need adjustment"
-            echo "Response: ${AUTH_HEALTH}"
+            echo "❌ API Gateway routing to /api/v1/auth/health failed"
+            echo "Response: ${AUTH_RESPONSE}"
+            echo "Headers:"; cat /tmp/auth_headers || true
+            exit 1
           fi

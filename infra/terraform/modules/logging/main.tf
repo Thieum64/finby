@@ -50,10 +50,6 @@ resource "google_logging_metric" "job_failed_count" {
     )
   EOF
 
-  label_extractors = {
-    service = "EXTRACT(labels.\"k8s-pod/serving.knative.dev/service\")"
-    error_type = "EXTRACT(jsonPayload.error)"
-  }
 
   depends_on = [google_project_service.logging]
 }
@@ -70,11 +66,6 @@ resource "google_logging_metric" "request_count" {
     httpRequest.requestMethod!=""
   EOF
 
-  label_extractors = {
-    service = "EXTRACT(labels.\"k8s-pod/serving.knative.dev/service\")"
-    method = "EXTRACT(httpRequest.requestMethod)"
-    status = "EXTRACT(httpRequest.status)"
-  }
 
   depends_on = [google_project_service.logging]
 }

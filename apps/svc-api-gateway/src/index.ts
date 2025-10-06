@@ -5,7 +5,7 @@ initOTel('svc-api-gateway');
 import fastify from 'fastify';
 import { ulid } from 'ulid';
 import { z } from 'zod';
-import { trace, context } from '@opentelemetry/api';
+import { trace, context, propagation } from '@opentelemetry/api';
 
 // Environment validation (NOTE: PORT is provided by Cloud Run, never set manually)
 const envSchema = z.object({
@@ -17,7 +17,8 @@ const envSchema = z.object({
   GCP_PROJECT_ID: z.string().default('hyperush-dev-250930115246'),
   SVC_AUTHZ_URL: z
     .string()
-    .default('https://svc-authz-2gc7gddpva-ew.a.run.app'),
+    .url('SVC_AUTHZ_URL must be a valid URL')
+    .refine((url) => url.length > 0, 'SVC_AUTHZ_URL cannot be empty'),
 });
 
 const env = envSchema.parse(process.env);
@@ -140,17 +141,24 @@ server.get('/health', async (request, _reply) => {
 // API Gateway routing
 server.register(
   async function apiGatewayRoutes(server) {
-    // Route /auth/** to svc-authz
+    // Route /api/v1/auth/** to svc-authz with W3C trace propagation
     server.register(import('@fastify/http-proxy'), {
       upstream: env.SVC_AUTHZ_URL,
-      prefix: '/auth',
+      prefix: '/api/v1/auth',
       rewritePrefix: '',
       http2: false,
-      preHandler: (request, reply, done) => {
-        // Add custom headers for internal service communication
-        request.headers['x-gateway-source'] = 'svc-api-gateway';
-        request.headers['x-gateway-version'] = '0.1.0';
-        done();
+      rewriteRequestHeaders: (request, headers) => {
+        // Inject W3C trace propagation headers
+        const carrier = {};
+        propagation.inject(context.active(), carrier);
+
+        // Merge propagation headers with existing headers
+        return {
+          ...headers,
+          ...carrier,
+          'x-gateway-source': 'svc-api-gateway',
+          'x-gateway-version': '0.1.0',
+        };
       },
     });
 
@@ -170,7 +178,7 @@ server.register(
         timestamp: new Date().toISOString(),
         requestId: request.headers['x-request-id'],
         routes: {
-          '/auth/**': env.SVC_AUTHZ_URL,
+          '/api/v1/auth/**': env.SVC_AUTHZ_URL,
           '/api/v1/jobs/**': 'TBD - Cloud Run Jobs',
           '/api/v1/notifications/**': 'TBD - Future service',
         },

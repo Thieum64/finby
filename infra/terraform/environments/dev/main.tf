@@ -61,24 +61,55 @@ module "logging" {
   enable_error_sink = var.enable_error_sink
 }
 
-module "monitoring" {
-  source      = "../../modules/monitoring"
-  project_id  = var.project_id
-  environment = "dev"
+# TODO: Réintégrer le module monitoring complexe après correction des erreurs d'API
+# module "monitoring" {
+#   source      = "../../modules/monitoring"
+#   project_id  = var.project_id
+#   environment = "dev"
+#
+#   # Enable dashboards and alerts
+#   enable_dashboards = var.enable_monitoring_dashboards
+#   enable_alerts     = var.enable_monitoring_alerts
+#
+#   # Budget configuration
+#   budget_amount     = var.monthly_budget_amount
+#   budget_thresholds = var.budget_alert_thresholds
+#
+#   # Services to monitor
+#   services = ["svc-authz", "svc-api-gateway", "worker-jobs"]
+#
+#   # Notification channels (empty for now, can be added later)
+#   notification_channels = []
+# }
 
-  # Enable dashboards and alerts
-  enable_dashboards = var.enable_monitoring_dashboards
-  enable_alerts     = var.enable_monitoring_alerts
+# Use existing service account for worker
+data "google_service_account" "worker_sa" {
+  account_id = "svc-authz-sa"
+  project    = var.project_id
+}
 
-  # Budget configuration
-  budget_amount     = var.monthly_budget_amount
-  budget_thresholds = var.budget_alert_thresholds
+# Worker Pub/Sub Job (squelette)
+module "worker_jobs" {
+  source = "../../modules/cloud_run_job"
 
-  # Services to monitor
-  services = ["svc-authz", "svc-api-gateway", "worker-jobs"]
+  name                   = "worker-jobs"
+  location              = var.region
+  project_id            = var.project_id
+  image                 = var.svc_authz_image
+  service_account_email = data.google_service_account.worker_sa.email
 
-  # Notification channels (empty for now, can be added later)
-  notification_channels = []
+  env_vars = {
+    GCP_PROJECT_ID = var.project_id
+    NODE_ENV       = "production"
+    LOG_LEVEL      = "info"
+    WORKER_TYPE    = "pubsub-jobs"
+  }
+
+  cpu         = "1000m"
+  memory      = "1Gi"
+  task_count  = 1
+  parallelism = 1
+  task_timeout = 300
 }
 
 # Cloud Run Services
@@ -185,23 +216,29 @@ output "svc_api_gateway_url" {
   value       = module.svc_api_gateway.service_url
 }
 
-# Monitoring outputs
-output "monitoring_dashboard_urls" {
-  description = "URLs of monitoring dashboards"
-  value       = module.monitoring.dashboard_urls
+output "worker_jobs_name" {
+  description = "Name of the worker jobs"
+  value       = module.worker_jobs.job_name
 }
 
-output "monitoring_alert_policies" {
-  description = "Created alert policy IDs"
-  value       = module.monitoring.alert_policy_ids
-}
-
-output "monitoring_console_url" {
-  description = "Google Cloud Monitoring console URL"
-  value       = module.monitoring.monitoring_console_url
-}
-
-output "budget_name" {
-  description = "Budget name for cost monitoring"
-  value       = module.monitoring.budget_name
-}
+# TODO: Réintégrer les outputs monitoring après correction du module
+# # Monitoring outputs
+# output "monitoring_dashboard_urls" {
+#   description = "URLs of monitoring dashboards"
+#   value       = module.monitoring.dashboard_urls
+# }
+#
+# output "monitoring_alert_policies" {
+#   description = "Created alert policy IDs"
+#   value       = module.monitoring.alert_policy_ids
+# }
+#
+# output "monitoring_console_url" {
+#   description = "Google Cloud Monitoring console URL"
+#   value       = module.monitoring.monitoring_console_url
+# }
+#
+# output "budget_name" {
+#   description = "Budget name for cost monitoring"
+#   value       = module.monitoring.budget_name
+# }
