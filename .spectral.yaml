@@ -1,0 +1,8 @@
+extends: spectral:oas
+rules:
+  operation-operationId: error
+  operation-tags: error
+  operation-tag-defined: error
+  no-$ref-siblings: error
+  oas3-valid-media-example: warn
+  oas3-valid-schema-example: warn

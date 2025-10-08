@@ -1,0 +1,251 @@
+openapi: 3.1.0
+info:
+  title: AuthZ Service API
+  version: 1.0.0
+  description: Authorization service for tenant and membership management
+
+servers:
+  - url: https://api.hyperush.dev
+    description: Production
+  - url: http://localhost:8080
+    description: Local development
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: health
+    description: Health check endpoints
+  - name: auth
+    description: Authentication and user context
+  - name: tenants
+    description: Tenant management
+
+paths:
+  /api/v1/auth/health:
+    get:
+      operationId: getHealth
+      tags:
+        - health
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - ok
+                  - service
+                  - version
+                properties:
+                  ok:
+                    type: boolean
+                  service:
+                    type: string
+                    enum:
+                      - svc-authz
+                  version:
+                    type: string
+
+  /api/v1/auth/me:
+    get:
+      operationId: getMe
+      tags:
+        - auth
+      summary: Get current user context
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+      responses:
+        '200':
+          description: User context retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserContext'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /api/v1/auth/tenants:
+    post:
+      operationId: createTenant
+      tags:
+        - tenants
+      summary: Create a new tenant
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XIdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 64
+      responses:
+        '201':
+          description: Tenant created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - tenantId
+                properties:
+                  tenantId:
+                    $ref: '#/components/schemas/Ulid'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+
+  /api/v1/auth/tenants/{tenantId}/access:
+    head:
+      operationId: checkTenantAccess
+      tags:
+        - tenants
+      summary: Check if user has access to tenant
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Ulid'
+        - $ref: '#/components/parameters/XRequestId'
+      responses:
+        '200':
+          description: User has access to tenant
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    XRequestId:
+      name: x-request-id
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Request ID for tracing (ULID format recommended)
+
+    XIdempotencyKey:
+      name: x-idempotency-key
+      in: header
+      required: true
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9._~-]{10,64}$'
+      description: Idempotency key for safe retries
+
+  schemas:
+    Ulid:
+      type: string
+      pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'
+      description: ULID in Crockford base32 encoding
+
+    Role:
+      type: string
+      enum:
+        - Owner
+        - Collaborator
+        - PlatformAdmin
+
+    TenantRole:
+      type: object
+      required:
+        - tenantId
+        - roles
+      properties:
+        tenantId:
+          $ref: '#/components/schemas/Ulid'
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
+          minItems: 1
+
+    UserContext:
+      type: object
+      required:
+        - uid
+        - email
+        - tenants
+      properties:
+        uid:
+          type: string
+        email:
+          type: string
+          format: email
+        tenants:
+          type: array
+          items:
+            $ref: '#/components/schemas/TenantRole'
+
+    ErrorResponse:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    ForbiddenError:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    ConflictError:
+      description: Resource conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    ValidationError:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
