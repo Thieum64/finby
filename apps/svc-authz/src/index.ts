@@ -8,6 +8,8 @@ import { z } from 'zod';
 import { trace, context } from '@opentelemetry/api';
 import authPlugin from './plugins/auth';
 import healthRoutes from './routes/health';
+import meRoutes from './routes/me';
+import tenantsRoutes from './routes/tenants';
 import helmet from '@fastify/helmet';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
@@ -148,9 +150,9 @@ server.register(
   async function v1Routes(server) {
     // Register auth routes under /auth prefix
     await server.register(healthRoutes, { prefix: '/auth' });
+    await server.register(meRoutes, { prefix: '/auth' });
+    await server.register(tenantsRoutes, { prefix: '/auth' });
 
-    // TODO: M2 - Add /v1/me endpoint (current user info)
-    // TODO: M2 - Add /v1/tenants endpoints
     // TODO: M3 - Add /v1/invitations endpoints
 
     server.get('/ping', async () => {
