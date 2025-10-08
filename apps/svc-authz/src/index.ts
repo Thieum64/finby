@@ -6,6 +6,11 @@ import fastify from 'fastify';
 import { ulid } from 'ulid';
 import { z } from 'zod';
 import { trace, context } from '@opentelemetry/api';
+import authPlugin from './plugins/auth';
+import healthRoutes from './routes/health';
+import helmet from '@fastify/helmet';
+import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 
 // Environment validation (NOTE: PORT is provided by Cloud Run, never set manually)
 const envSchema = z.object({
@@ -15,6 +20,7 @@ const envSchema = z.object({
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
     .default('info'),
   GCP_PROJECT_ID: z.string().default('hyperush-dev-250930115246'),
+  FIREBASE_PROJECT_ID: z.string().default('hyperush-dev-250930115246'),
 });
 
 const env = envSchema.parse(process.env);
@@ -60,8 +66,11 @@ server.addHook('onRequest', async (request, reply) => {
 
 // Register plugins function
 const registerPlugins = async () => {
+  // Auth plugin (must be registered before routes that need it)
+  await server.register(authPlugin);
+
   // Security middleware with enhanced security headers
-  await server.register(import('@fastify/helmet'), {
+  await server.register(helmet, {
     global: true,
     contentSecurityPolicy: {
       directives: {
@@ -86,11 +95,11 @@ const registerPlugins = async () => {
     },
   });
 
-  await server.register(import('@fastify/cors'), {
+  await server.register(cors, {
     origin: env.NODE_ENV === 'development' ? ['http://localhost:3000'] : false,
   });
 
-  await server.register(import('@fastify/rate-limit'), {
+  await server.register(rateLimit, {
     max: 100,
     timeWindow: '1 minute',
   });
@@ -137,6 +146,9 @@ server.get('/health', async (request, _reply) => {
 // v1 API namespace (future endpoints)
 server.register(
   async function v1Routes(server) {
+    // Register auth routes under /auth prefix
+    await server.register(healthRoutes, { prefix: '/auth' });
+
     // TODO: M2 - Add /v1/me endpoint (current user info)
     // TODO: M2 - Add /v1/tenants endpoints
     // TODO: M3 - Add /v1/invitations endpoints
