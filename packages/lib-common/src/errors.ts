@@ -1,116 +1,80 @@
-import { z } from 'zod';
-
-// Error codes enum
-export enum ErrorCode {
-  // Generic
-  INTERNAL_ERROR = 'INTERNAL_ERROR',
-  VALIDATION_ERROR = 'VALIDATION_ERROR',
-  NOT_FOUND = 'NOT_FOUND',
-  UNAUTHORIZED = 'UNAUTHORIZED',
-  FORBIDDEN = 'FORBIDDEN',
-  RATE_LIMITED = 'RATE_LIMITED',
-  
-  // Auth/AuthZ specific
-  INVALID_TOKEN = 'INVALID_TOKEN',
-  TOKEN_EXPIRED = 'TOKEN_EXPIRED',
-  INSUFFICIENT_PERMISSIONS = 'INSUFFICIENT_PERMISSIONS',
-  TENANT_NOT_FOUND = 'TENANT_NOT_FOUND',
-  
-  // Business logic
-  SHOP_NOT_CONNECTED = 'SHOP_NOT_CONNECTED',
-  REQUEST_IN_PROGRESS = 'REQUEST_IN_PROGRESS',
-  QUOTA_EXCEEDED = 'QUOTA_EXCEEDED',
-}
-
-// Error domains for categorization
-export enum ErrorDomain {
-  AUTH = 'auth',
-  AUTHZ = 'authz',
-  SHOPS = 'shops',
-  REQUESTS = 'requests',
-  BILLING = 'billing',
-  SYSTEM = 'system',
-}
-
-// Base error class
-export class BaseError extends Error {
-  public readonly code: ErrorCode;
-  public readonly domain: ErrorDomain;
-  public readonly statusCode: number;
-  public readonly details?: Record<string, any>;
-  public readonly reqId?: string;
+export class AppError extends Error {
+  public readonly code: string;
+  public readonly httpStatus: number;
+  public readonly details?: unknown;
 
   constructor(
+    code: string,
     message: string,
-    code: ErrorCode,
-    domain: ErrorDomain,
-    statusCode: number = 500,
-    details?: Record<string, any>,
-    reqId?: string
+    httpStatus: number,
+    details?: unknown
   ) {
     super(message);
-    this.name = this.constructor.name;
+    this.name = 'AppError';
     this.code = code;
-    this.domain = domain;
-    this.statusCode = statusCode;
+    this.httpStatus = httpStatus;
     this.details = details;
-    this.reqId = reqId;
-    
     Error.captureStackTrace(this, this.constructor);
   }
 
-  toJSON() {
-    return {
-      error: this.name,
-      message: this.message,
+  toJSON(): Record<string, unknown> {
+    const obj: Record<string, unknown> = {
       code: this.code,
-      domain: this.domain,
-      statusCode: this.statusCode,
-      details: this.details,
-      reqId: this.reqId,
-      timestamp: new Date().toISOString(),
+      message: this.message,
     };
+    if (this.details !== undefined) {
+      obj.details = this.details;
+    }
+    if (process.env.NODE_ENV !== 'production' && this.stack) {
+      obj.stack = this.stack;
+    }
+    return obj;
   }
 }
 
-// Specific error classes
-export class ValidationError extends BaseError {
-  constructor(message: string, details?: Record<string, any>, reqId?: string) {
-    super(message, ErrorCode.VALIDATION_ERROR, ErrorDomain.SYSTEM, 400, details, reqId);
-  }
+export function unauthorized(
+  message = 'Unauthorized',
+  details?: unknown
+): AppError {
+  return new AppError('UNAUTHORIZED', message, 401, details);
 }
 
-export class NotFoundError extends BaseError {
-  constructor(resource: string, reqId?: string) {
-    super(`${resource} not found`, ErrorCode.NOT_FOUND, ErrorDomain.SYSTEM, 404, undefined, reqId);
-  }
+export function forbidden(message = 'Forbidden', details?: unknown): AppError {
+  return new AppError('FORBIDDEN', message, 403, details);
 }
 
-export class UnauthorizedError extends BaseError {
-  constructor(message: string = 'Unauthorized', reqId?: string) {
-    super(message, ErrorCode.UNAUTHORIZED, ErrorDomain.AUTH, 401, undefined, reqId);
-  }
+export function notFound(message = 'Not found', details?: unknown): AppError {
+  return new AppError('NOT_FOUND', message, 404, details);
 }
 
-export class ForbiddenError extends BaseError {
-  constructor(message: string = 'Forbidden', reqId?: string) {
-    super(message, ErrorCode.FORBIDDEN, ErrorDomain.AUTHZ, 403, undefined, reqId);
-  }
+export function conflict(message = 'Conflict', details?: unknown): AppError {
+  return new AppError('CONFLICT', message, 409, details);
 }
 
-export class RateLimitError extends BaseError {
-  constructor(message: string = 'Rate limit exceeded', retryAfter?: number, reqId?: string) {
-    super(message, ErrorCode.RATE_LIMITED, ErrorDomain.SYSTEM, 429, { retryAfter }, reqId);
-  }
+export function invalidArgument(
+  message = 'Invalid argument',
+  details?: unknown
+): AppError {
+  return new AppError('INVALID_ARGUMENT', message, 400, details);
 }
 
-// Zod validation error converter
-export const formatZodError = (error: z.ZodError, reqId?: string): ValidationError => {
-  const details = error.errors.reduce((acc, err) => {
-    const path = err.path.join('.');
-    acc[path] = err.message;
-    return acc;
-  }, {} as Record<string, string>);
+export function preconditionFailed(
+  message = 'Precondition failed',
+  details?: unknown
+): AppError {
+  return new AppError('PRECONDITION_FAILED', message, 412, details);
+}
 
-  return new ValidationError('Validation failed', details, reqId);
-};
+export function rateLimited(
+  message = 'Rate limit exceeded',
+  details?: unknown
+): AppError {
+  return new AppError('RATE_LIMITED', message, 429, details);
+}
+
+export function internal(
+  message = 'Internal server error',
+  details?: unknown
+): AppError {
+  return new AppError('INTERNAL', message, 500, details);
+}

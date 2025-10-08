@@ -1,48 +1,20 @@
 import { ulid } from 'ulid';
 
-/**
- * Generate a new ULID
- */
-export const generateId = (): string => ulid();
+const ULID_REGEX = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
-/**
- * Generate a request ID
- */
-export const generateRequestId = (): string => `req_${ulid()}`;
+export function newUlid(): string {
+  return ulid();
+}
 
-/**
- * Generate a job ID
- */
-export const generateJobId = (): string => `job_${ulid()}`;
+export function isUlid(str: string): boolean {
+  return ULID_REGEX.test(str);
+}
 
-/**
- * Generate a tenant ID
- */
-export const generateTenantId = (): string => `ten_${ulid()}`;
+export type TenantId = string & { readonly __brand: 'TenantId' };
 
-/**
- * Generate a shop ID
- */
-export const generateShopId = (): string => `shop_${ulid()}`;
-
-/**
- * Validate if a string is a valid ULID
- */
-export const isValidUlid = (id: string): boolean => {
-  const ulidPattern = /^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$/;
-  return ulidPattern.test(id);
-};
-
-/**
- * Extract timestamp from ULID
- */
-export const getTimestampFromUlid = (id: string): Date => {
-  if (!isValidUlid(id)) {
-    throw new Error('Invalid ULID format');
+export function asTenantId(str: string): TenantId {
+  if (!isUlid(str)) {
+    throw new Error(`Invalid tenant ID: ${str}`);
   }
-  
-  const time = ulid(Date.now());
-  // Extract the first 10 characters which represent the timestamp
-  const timestamp = parseInt(id.substring(0, 10), 32);
-  return new Date(timestamp);
-};
+  return str as TenantId;
+}
