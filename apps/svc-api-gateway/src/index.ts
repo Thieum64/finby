@@ -6,6 +6,7 @@ import fastify from 'fastify';
 import { ulid } from 'ulid';
 import { z } from 'zod';
 import { trace, context, propagation } from '@opentelemetry/api';
+import authPlugin, { isUlid } from './plugins/auth';
 
 // Environment validation (NOTE: PORT is provided by Cloud Run, never set manually)
 const envSchema = z.object({
@@ -15,6 +16,7 @@ const envSchema = z.object({
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
     .default('info'),
   GCP_PROJECT_ID: z.string().default('hyperush-dev-250930115246'),
+  FIREBASE_PROJECT_ID: z.string().default('hyperush-dev-250930115246'),
   SVC_AUTHZ_URL: z
     .string()
     .url('SVC_AUTHZ_URL must be a valid URL')
@@ -64,6 +66,9 @@ server.addHook('onRequest', async (request, reply) => {
 
 // Register plugins function
 const registerPlugins = async () => {
+  // Auth plugin (must be registered before routes that need it)
+  await server.register(authPlugin);
+
   // Security middleware with enhanced security headers
   await server.register(import('@fastify/helmet'), {
     global: true,
@@ -152,12 +157,31 @@ server.register(
         const carrier = {};
         propagation.inject(context.active(), carrier);
 
-        // Merge propagation headers with existing headers
-        return {
-          ...headers,
+        // Prepare internal headers
+        const internalHeaders: Record<string, string> = {
           ...carrier,
           'x-gateway-source': 'svc-api-gateway',
           'x-gateway-version': '0.1.0',
+        };
+
+        // Add user context if present
+        if (request.user) {
+          internalHeaders['x-user-uid'] = request.user.uid;
+          if (request.user.email) {
+            internalHeaders['x-user-email'] = request.user.email;
+          }
+        }
+
+        // Propagate x-tenant-id if present and valid ULID
+        const tenantId = headers['x-tenant-id'] as string;
+        if (tenantId && isUlid(tenantId)) {
+          internalHeaders['x-tenant-id'] = tenantId;
+        }
+
+        // Merge propagation headers with existing headers
+        return {
+          ...headers,
+          ...internalHeaders,
         };
       },
     });
