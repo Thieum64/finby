@@ -10,6 +10,7 @@
     "dev": "tsup --watch --onSuccess \"node dist/index.js\"",
     "start": "node dist/index.js",
     "lint": "eslint .",
+    "typecheck": "tsc -p . --noEmit",
     "test": "vitest",
     "test:coverage": "vitest --coverage",
     "clean": "rm -rf dist"
