@@ -61,6 +61,13 @@ module "logging" {
   enable_error_sink = var.enable_error_sink
 }
 
+module "monitoring_lite" {
+  source     = "../../modules/monitoring_lite"
+  project_id = var.project_id
+  region     = var.region
+  service    = "svc-authz"
+}
+
 # TODO: Réintégrer le module monitoring complexe après correction des erreurs d'API
 # module "monitoring" {
 #   source      = "../../modules/monitoring"
@@ -88,28 +95,75 @@ data "google_service_account" "worker_sa" {
   project    = var.project_id
 }
 
-# Worker Pub/Sub Job (squelette)
-module "worker_jobs" {
-  source = "../../modules/cloud_run_job"
+# Worker Pub/Sub Service (push subscriber)
+module "worker_subscriber" {
+  source = "../../modules/cloud_run_service"
 
-  name                   = "worker-jobs"
-  location              = var.region
-  project_id            = var.project_id
-  image                 = var.svc_authz_image
-  service_account_email = data.google_service_account.worker_sa.email
+  name       = "worker-subscriber"
+  location   = var.region
+  project_id = var.project_id
+  image      = var.worker_subscriber_image
+
+  runtime_service_account = data.google_service_account.worker_sa.email
 
   env_vars = {
     GCP_PROJECT_ID = var.project_id
     NODE_ENV       = "production"
     LOG_LEVEL      = "info"
-    WORKER_TYPE    = "pubsub-jobs"
   }
 
-  cpu         = "1000m"
-  memory      = "1Gi"
-  task_count  = 1
-  parallelism = 1
-  task_timeout = 300
+  cpu                     = "1"
+  memory                  = "1Gi"
+  min_instances          = 0
+  max_instances          = 10
+  container_concurrency  = 80
+  port                   = 8080
+  ingress                = "INGRESS_TRAFFIC_INTERNAL_ONLY"  # Only Pub/Sub can access
+  execution_environment  = "EXECUTION_ENVIRONMENT_GEN2"
+  enable_public_invoker  = false  # No public access
+}
+
+# Create a Pub/Sub push-compatible service account
+resource "google_service_account" "pubsub_push_sa" {
+  account_id   = "pubsub-push-sa"
+  display_name = "Pub/Sub Push Service Account"
+  project      = var.project_id
+}
+
+# Give Pub/Sub service account permission to invoke the worker
+resource "google_cloud_run_service_iam_member" "pubsub_invoker" {
+  service  = module.worker_subscriber.service_name
+  location = var.region
+  project  = var.project_id
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.pubsub_push_sa.email}"
+}
+
+# Create push subscription to jobs topic
+resource "google_pubsub_subscription" "jobs_push_sub" {
+  name    = "jobs-push-sub"
+  topic   = module.pubsub.topics["jobs"]
+  project = var.project_id
+
+  push_config {
+    push_endpoint = "${module.worker_subscriber.service_url}/pubsub"
+
+    oidc_token {
+      service_account_email = google_service_account.pubsub_push_sa.email
+    }
+  }
+
+  ack_deadline_seconds = 20
+  message_retention_duration = "604800s"  # 7 days
+
+  retry_policy {
+    minimum_backoff = "10s"
+    maximum_backoff = "600s"
+  }
+
+  depends_on = [
+    google_cloud_run_service_iam_member.pubsub_invoker
+  ]
 }
 
 # Cloud Run Services
@@ -124,9 +178,10 @@ module "svc_authz" {
   runtime_service_account = data.google_service_account.svc_authz_sa.email
 
   env_vars = {
-    GCP_PROJECT_ID = var.project_id
-    NODE_ENV       = "production"
-    LOG_LEVEL      = "info"
+    GCP_PROJECT_ID      = var.project_id
+    FIREBASE_PROJECT_ID = var.project_id
+    NODE_ENV            = "production"
+    LOG_LEVEL           = "info"
   }
 
   cpu                     = "1"
@@ -216,29 +271,18 @@ output "svc_api_gateway_url" {
   value       = module.svc_api_gateway.service_url
 }
 
-output "worker_jobs_name" {
-  description = "Name of the worker jobs"
-  value       = module.worker_jobs.job_name
+output "worker_subscriber_url" {
+  description = "URL of the worker subscriber service"
+  value       = module.worker_subscriber.service_url
 }
 
-# TODO: Réintégrer les outputs monitoring après correction du module
-# # Monitoring outputs
-# output "monitoring_dashboard_urls" {
-#   description = "URLs of monitoring dashboards"
-#   value       = module.monitoring.dashboard_urls
-# }
-#
-# output "monitoring_alert_policies" {
-#   description = "Created alert policy IDs"
-#   value       = module.monitoring.alert_policy_ids
-# }
-#
-# output "monitoring_console_url" {
-#   description = "Google Cloud Monitoring console URL"
-#   value       = module.monitoring.monitoring_console_url
-# }
-#
-# output "budget_name" {
-#   description = "Budget name for cost monitoring"
-#   value       = module.monitoring.budget_name
-# }
+# Monitoring lite outputs
+output "monitoring_lite_dashboard_url" {
+  description = "URL of the monitoring lite dashboard"
+  value       = module.monitoring_lite.dashboard_url
+}
+
+output "monitoring_lite_alert_policies" {
+  description = "Created alert policy IDs"
+  value       = module.monitoring_lite.alert_policy_ids
+}
