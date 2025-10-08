@@ -1,0 +1,33 @@
+name: tfsec (infra)
+
+on:
+  push:
+    paths:
+      - 'infra/terraform/**'
+      - '.github/workflows/tfsec.yml'
+  workflow_dispatch:
+
+jobs:
+  tfsec:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run tfsec (SARIF)
+        uses: aquasecurity/tfsec-action@v2
+        with:
+          working_directory: infra/terraform
+          additional_args: --format sarif --out tfsec.sarif --minimum-severity HIGH
+
+      - name: Upload SARIF to code scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: tfsec.sarif
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfsec-report
+          path: tfsec.sarif
