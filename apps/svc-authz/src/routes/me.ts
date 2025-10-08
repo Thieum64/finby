@@ -17,11 +17,25 @@ const meRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
+      if (!request.user.email) {
+        request.log.warn(
+          {
+            reqId: request.headers['x-request-id'],
+            uid: request.user.uid,
+          },
+          'Missing email on token'
+        );
+        return _reply.status(400).send({
+          code: 'INVALID_ARGUMENT',
+          message: 'Missing email on token',
+        });
+      }
+
       const tenants = await membershipsRepo.listTenantsByUid(request.user.uid);
 
       return {
         uid: request.user.uid,
-        email: request.user.email || '',
+        email: request.user.email,
         tenants,
       };
     }

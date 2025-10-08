@@ -1,9 +1,14 @@
 import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { ulid } from 'ulid';
+import { createHash } from 'node:crypto';
 import { validateIdempotencyKey } from '@hp/lib-common';
 import { TenantsRepo, MembershipsRepo } from '../repos/index.js';
-import { IDEMPOTENCY_HEADER, withIdempotency } from '../data/idempotency.js';
+import {
+  IDEMPOTENCY_HEADER,
+  withIdempotency,
+  IdempotencyConflictError,
+} from '../data/idempotency.js';
 
 const createTenantSchema = z.object({
   name: z.string().min(2).max(64),
@@ -59,46 +64,61 @@ const tenantsRoutes: FastifyPluginAsync = async (fastify) => {
       const { name } = parseResult.data;
       const uid = request.user.uid;
 
+      // Calculate body hash
+      const bodyHash = createHash('sha256')
+        .update(JSON.stringify({ name }))
+        .digest('hex');
+
       // Execute with idempotency
-      const { fromCache, result } = await withIdempotency(
-        idempotencyKey,
-        uid,
-        async () => {
-          const tenantId = ulid();
-          const createdAt = new Date().toISOString();
+      try {
+        const { fromCache, result } = await withIdempotency(
+          idempotencyKey,
+          async () => {
+            const tenantId = ulid();
+            const createdAt = new Date().toISOString();
 
-          await tenantsRepo.set({
-            tenantId,
-            name,
-            createdAt,
-            ownerUid: uid,
-          });
+            await tenantsRepo.set({
+              tenantId,
+              name,
+              createdAt,
+              ownerUid: uid,
+            });
 
-          await membershipsRepo.set({
-            tenantId,
+            await membershipsRepo.set({
+              tenantId,
+              uid,
+              roles: ['Owner'],
+              createdAt,
+            });
+
+            return { tenantId };
+          },
+          { uid, bodyHash }
+        );
+
+        // Log structured
+        request.log.info(
+          {
+            reqId: request.headers['x-request-id'],
             uid,
-            roles: ['Owner'],
-            createdAt,
+            tenantId: result.tenantId,
+            idempotent: fromCache,
+          },
+          `Tenant ${fromCache ? 'retrieved from cache' : 'created'}`
+        );
+
+        // Return 200 if from cache, 201 if newly created
+        const statusCode = fromCache ? 200 : 201;
+        return reply.status(statusCode).send(result);
+      } catch (error) {
+        if (error instanceof IdempotencyConflictError) {
+          return reply.status(409).send({
+            code: 'ALREADY_EXISTS',
+            message: error.message,
           });
-
-          return { tenantId };
         }
-      );
-
-      // Log structured
-      request.log.info(
-        {
-          reqId: request.headers['x-request-id'],
-          uid,
-          tenantId: result.tenantId,
-          idempotent: fromCache,
-        },
-        `Tenant ${fromCache ? 'retrieved from cache' : 'created'}`
-      );
-
-      // Return 200 if from cache, 201 if newly created
-      const statusCode = fromCache ? 200 : 201;
-      return reply.status(statusCode).send(result);
+        throw error;
+      }
     }
   );
 };

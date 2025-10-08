@@ -9,12 +9,20 @@ interface IdempotencyRecord<T> {
   createdAt: string;
   uid: string;
   result: T;
+  bodyHash?: string;
+}
+
+export class IdempotencyConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'IdempotencyConflictError';
+  }
 }
 
 export async function withIdempotency<T>(
   key: string,
-  uid: string,
-  exec: () => Promise<T>
+  exec: () => Promise<T>,
+  opts?: { uid?: string; bodyHash?: string }
 ): Promise<{ fromCache: boolean; result: T }> {
   const hash = idempotencyKeyHash(key);
   const collection = db
@@ -26,6 +34,12 @@ export async function withIdempotency<T>(
   if (doc.exists) {
     const data = doc.data();
     if (data) {
+      // Check if bodyHash differs when provided
+      if (opts?.bodyHash && data.bodyHash && opts.bodyHash !== data.bodyHash) {
+        throw new IdempotencyConflictError(
+          'idempotency-key reused with different payload'
+        );
+      }
       return { fromCache: true, result: data.result };
     }
   }
@@ -33,8 +47,9 @@ export async function withIdempotency<T>(
   const result = await exec();
   await docRef.set({
     createdAt: new Date().toISOString(),
-    uid,
+    uid: opts?.uid ?? 'unknown',
     result,
+    bodyHash: opts?.bodyHash,
   });
 
   return { fromCache: false, result };
