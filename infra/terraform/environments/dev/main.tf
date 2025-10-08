@@ -207,10 +207,11 @@ module "svc_api_gateway" {
   runtime_service_account = data.google_service_account.svc_api_gateway_sa.email
 
   env_vars = {
-    GCP_PROJECT_ID = var.project_id
-    NODE_ENV       = "production"
-    LOG_LEVEL      = "info"
-    SVC_AUTHZ_URL  = module.svc_authz.service_url
+    GCP_PROJECT_ID      = var.project_id
+    FIREBASE_PROJECT_ID = var.project_id
+    NODE_ENV            = "production"
+    LOG_LEVEL           = "info"
+    SVC_AUTHZ_URL       = module.svc_authz.service_url
   }
 
   cpu                     = "1"
