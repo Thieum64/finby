@@ -41,4 +41,14 @@ export class MembershipsRepo {
       .get();
     return snapshot.docs.map((doc) => doc.data());
   }
+
+  async getRoles(tenantId: Ulid, uid: string): Promise<string[] | null> {
+    const membership = await this.get(tenantId, uid);
+    return membership ? membership.roles : null;
+  }
+
+  async hasAccess(tenantId: Ulid, uid: string): Promise<boolean> {
+    const roles = await this.getRoles(tenantId, uid);
+    return roles !== null && roles.length > 0;
+  }
 }
