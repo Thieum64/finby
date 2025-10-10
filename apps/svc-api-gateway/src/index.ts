@@ -150,7 +150,7 @@ server.register(
     server.register(import('@fastify/http-proxy'), {
       upstream: env.SVC_AUTHZ_URL,
       prefix: '/api/v1/auth',
-      rewritePrefix: '',
+      rewritePrefix: '/v1/auth',
       http2: false,
       rewriteRequestHeaders: (request, headers) => {
         // Inject W3C trace propagation headers
