@@ -22,6 +22,7 @@ module.exports = {
         'lib-shopify',
         'lib-git',
         'lib-llm',
+        'sdk-authz',
         'contracts',
         'infra',
         'ops',
