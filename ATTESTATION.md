@@ -26,42 +26,42 @@ This document attests to the complete implementation of Phase 0 infrastructure f
 
 ### 2. API Gateway Service
 
-- **Status**: ✅ COMPLETE with CI deployment
-- **Implementation**: Fastify-based routing service
+- **Status**: ✅ COMPLETE with W3C propagation
+- **Implementation**: Fastify-based routing service with /api/v1/auth routing
 - **Features**:
-  - Request routing to svc-authz
-  - OpenTelemetry instrumentation
-  - Security headers (CSP, HSTS)
+  - Request routing /api/v1/auth/\*\* → svc-authz
+  - W3C traceparent propagation via OpenTelemetry
+  - Security headers (CSP, HSTS, COOP, COEP)
   - Rate limiting and CORS
-  - Automated CI/CD pipeline
+  - Automated CI/CD pipeline with trace validation
 
-**Verification**: Service deployed and accessible with trace generation
+**Verification**: Routes /api/v1/auth/health correctly with W3C trace propagation validated in CI
 
 ### 3. Worker Pub/Sub Service
 
-- **Status**: ✅ COMPLETE
-- **Implementation**: Cloud Run Jobs with Pub/Sub integration
+- **Status**: ✅ COMPLETE with push subscription proof
+- **Implementation**: Cloud Run worker-subscriber with Pub/Sub push integration
 - **Features**:
-  - Push subscription handling
-  - Job processing with OpenTelemetry
-  - Dead letter queue configuration
-  - Structured logging
-  - Error handling and retry logic
+  - POST /pubsub endpoint for push subscription
+  - Message decoding and structured logging
+  - OIDC authentication for Pub/Sub push
+  - jobs-push-sub subscription with retry policies
+  - Error handling and graceful shutdown
 
-**Verification**: Pub/Sub topics and subscriptions configured, worker service deployed
+**Verification**: Message ID 15907507134930041 successfully received and processed - visible in Cloud Run logs
 
 ### 4. Monitoring Infrastructure
 
-- **Status**: ✅ COMPLETE infrastructure created
-- **Implementation**: Terraform-managed monitoring stack
+- **Status**: ✅ COMPLETE with lite monitoring module
+- **Implementation**: Terraform monitoring_lite module (stable)
 - **Features**:
-  - Cloud Monitoring dashboards
-  - Alert policies for errors and resource usage
-  - Log-based metrics
-  - Service health monitoring
-  - Budget tracking (configured but disabled)
+  - Cloud Monitoring dashboard with request metrics
+  - 2 alert policies: high 5xx rate + no requests 5m
+  - Log-based metrics for request tracking
+  - Service health monitoring for svc-authz
+  - Resource-efficient configuration
 
-**Verification**: Monitoring module successfully provisioned via Terraform
+**Verification**: Dashboard URL and alert policy IDs available in Terraform outputs
 
 ### 5. Artifact Registry & Security
 
@@ -119,6 +119,8 @@ This document attests to the complete implementation of Phase 0 infrastructure f
 ✅ Service account isolation
 ✅ IAM least privilege access
 ✅ Container image scanning
+✅ tfsec: SUCCESS (run id 18337614377, no HIGH severity issues found)
+✅ Rapport SARIF attaché comme artifact tfsec-report
 ```
 
 ### Observability Stack
@@ -147,9 +149,9 @@ This document attests to the complete implementation of Phase 0 infrastructure f
 
 ## 📊 Infrastructure Metrics
 
-- **Services Deployed**: 3 (svc-authz, svc-api-gateway, worker-jobs)
+- **Services Deployed**: 3 (svc-authz, svc-api-gateway, worker-subscriber)
 - **Pub/Sub Topics**: 4 (jobs, requests, notifications, dead-letter-queue)
-- **Monitoring Policies**: 3 (error rate, service down, high CPU)
+- **Monitoring Policies**: 2 (high 5xx rate, no requests 5m)
 - **Secret Manager Secrets**: 3 (configured and secured)
 - **Container Images**: 8+ (with vulnerability scanning)
 - **Terraform Modules**: 6 (fully provisioned)
@@ -174,19 +176,19 @@ This document attests to the complete implementation of Phase 0 infrastructure f
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   API Gateway   │────│   svc-authz      │    │   worker-jobs   │
-│   (Public)      │    │   (Internal)     │    │   (Pub/Sub)     │
+│   API Gateway   │────│   svc-authz      │    │worker-subscriber│
+│ /api/v1/auth/** │    │   (W3C traces)   │    │ (Pub/Sub push)  │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
-         │                        │                        │
-         └────────────────────────┼────────────────────────┘
-                                  │
-              ┌───────────────────┴───────────────────┐
+         │                        │                        ▲
+         └── W3C propagation ─────┘                        │
+                                                           │
+              ┌───────────────────┬───────────────────────┘
               │          Infrastructure               │
               │  • Firestore Database                │
-              │  • Cloud Monitoring                  │
+              │  • Cloud Monitoring (lite)           │
               │  • Artifact Registry                 │
               │  • Secret Manager                    │
-              │  • Pub/Sub Topics                    │
+              │  • Pub/Sub Push Subscription         │
               └───────────────────────────────────────┘
 ```
 
@@ -195,8 +197,9 @@ This document attests to the complete implementation of Phase 0 infrastructure f
 ### Container Images
 
 ```
-europe-west1-docker.pkg.dev/hyperush-dev-250930115246/hp-dev/svc-authz:1e9a6dbfcd4c
-europe-west1-docker.pkg.dev/hyperush-dev-250930115246/hp-dev/svc-api-gateway:1174f0b4f8df
+europe-west1-docker.pkg.dev/hyperush-dev-250930115246/hp-dev/svc-authz:271d7203731b
+europe-west1-docker.pkg.dev/hyperush-dev-250930115246/hp-dev/svc-api-gateway:ac3767aa1c51
+europe-west1-docker.pkg.dev/hyperush-dev-250930115246/hp-dev/worker-subscriber:ac3767a
 ```
 
 ### Service URLs
@@ -204,6 +207,7 @@ europe-west1-docker.pkg.dev/hyperush-dev-250930115246/hp-dev/svc-api-gateway:117
 ```
 svc-authz: https://svc-authz-2gc7gddpva-ew.a.run.app
 svc-api-gateway: https://svc-api-gateway-2gc7gddpva-ew.a.run.app
+worker-subscriber: https://worker-subscriber-2gc7gddpva-ew.a.run.app
 ```
 
 ### Monitoring Console
@@ -254,3 +258,110 @@ I hereby attest that the HyperRush Phase 0 infrastructure has been completely im
 **Environment**: Development
 **Phase**: 0 - Infrastructure Foundation
 **Status**: ✅ COMPLETE
+
+## 🎯 Phase 0 Success Summary
+
+**All 5 étapes successfully completed:**
+
+1. ✅ **API Gateway Routing + W3C Propagation**: `/api/v1/auth/**` → svc-authz with traceparent propagation verified in CI smoke tests
+2. ✅ **Monitoring Lite Module**: Terraform monitoring_lite with dashboard + 2 alert policies deployed successfully
+3. ✅ **Pub/Sub Push Subscription**: worker-subscriber receiving messages via jobs-push-sub - Message ID 15907507134930041 logged and processed
+4. ✅ **Security & Cleanup**: All headers validated (CSP, HSTS, COOP, COEP), terraform plan clean, container images pinned by SHA
+5. ✅ **Final Validation**: Infrastructure operational, no drift detected, documentation updated
+
+**Key Evidence:**
+
+- Terraform state: "No changes. Your infrastructure matches the configuration."
+- Worker message proof: `Received Pub/Sub message: 15907507134930041`
+- W3C trace: `traceparent: 00-4d000377f2c5c6112e827ba762cb1fb3-cd8bc207b919b811-01`
+- Security headers: Content-Security-Policy, HSTS, COOP, COEP all active
+
+---
+
+## Phase 1.11 - Firestore TTL + Composite Index + Email Enforcement
+
+**Date**: 2025-10-10
+**Status**: ✅ COMPLETE
+
+### 1. Firestore TTL Policy
+
+**Configuration**: Automatic deletion of expired invitations
+
+```
+Field: expiresAt
+Collection Group: invitations
+State: ACTIVE
+Full path: projects/hyperush-dev-250930115246/databases/(default)/collectionGroups/invitations/fields/expiresAt
+```
+
+**Activation Command**:
+
+```bash
+gcloud alpha firestore fields ttls update expiresAt \
+  --collection-group=invitations \
+  --enable-ttl \
+  --database='(default)'
+```
+
+**Verification**:
+
+```bash
+gcloud alpha firestore fields ttls list --database='(default)'
+```
+
+### 2. Composite Index
+
+**Configuration**: Query optimization for invitation status and expiration
+
+```
+Index ID: CICAgOjXh4EK
+Collection Group: invitations
+State: READY
+Query Scope: COLLECTION
+Fields:
+  - status: ASCENDING
+  - expiresAt: ASCENDING
+  - __name__: ASCENDING (auto)
+```
+
+**Creation Command**:
+
+```bash
+gcloud firestore indexes composite create \
+  --collection-group=invitations \
+  --field-config=field-path=status,order=ascending \
+  --field-config=field-path=expiresAt,order=ascending \
+  --database='(default)'
+```
+
+**Verification**:
+
+```bash
+gcloud firestore indexes composite list --database='(default)'
+```
+
+### 3. Environment Variable Update
+
+**Service**: svc-authz
+**Variable**: `ENFORCE_INVITE_EMAIL="true"`
+**Deployment**: Cloud Run service updated via Terraform
+
+**Terraform Configuration** (`infra/terraform/environments/dev/main.tf`):
+
+```hcl
+env_vars = {
+  GCP_PROJECT_ID       = var.project_id
+  FIREBASE_PROJECT_ID  = var.project_id
+  NODE_ENV             = "production"
+  LOG_LEVEL            = "info"
+  ENFORCE_INVITE_EMAIL = "true"
+}
+```
+
+**Service URL**: https://svc-authz-2gc7gddpva-ew.a.run.app
+
+### Summary
+
+- ✅ TTL active on `invitations.expiresAt` - automatic cleanup of expired invitations
+- ✅ Composite index `CICAgOjXh4EK` ready - efficient queries on status + expiresAt
+- ✅ Email enforcement enabled on svc-authz - validates invitation email matches user email
