@@ -1,7 +1,7 @@
 # Dev Environment Infrastructure
 terraform {
   required_version = ">= 1.0"
-  
+
   required_providers {
     google = {
       source  = "hashicorp/google"
@@ -54,7 +54,7 @@ module "secrets" {
 }
 
 module "logging" {
-  source = "../../modules/logging"
+  source            = "../../modules/logging"
   project_id        = var.project_id
   environment       = "dev"
   enable_metrics    = var.enable_metrics
@@ -112,15 +112,15 @@ module "worker_subscriber" {
     LOG_LEVEL      = "info"
   }
 
-  cpu                     = "1"
-  memory                  = "1Gi"
-  min_instances          = 0
-  max_instances          = 10
-  container_concurrency  = 80
-  port                   = 8080
-  ingress                = "INGRESS_TRAFFIC_INTERNAL_ONLY"  # Only Pub/Sub can access
-  execution_environment  = "EXECUTION_ENVIRONMENT_GEN2"
-  enable_public_invoker  = false  # No public access
+  cpu                   = "1"
+  memory                = "1Gi"
+  min_instances         = 0
+  max_instances         = 10
+  container_concurrency = 80
+  port                  = 8080
+  ingress               = "INGRESS_TRAFFIC_INTERNAL_ONLY" # Only Pub/Sub can access
+  execution_environment = "EXECUTION_ENVIRONMENT_GEN2"
+  enable_public_invoker = false # No public access
 }
 
 # Create a Pub/Sub push-compatible service account
@@ -153,8 +153,8 @@ resource "google_pubsub_subscription" "jobs_push_sub" {
     }
   }
 
-  ack_deadline_seconds = 20
-  message_retention_duration = "604800s"  # 7 days
+  ack_deadline_seconds       = 20
+  message_retention_duration = "604800s" # 7 days
 
   retry_policy {
     minimum_backoff = "10s"
@@ -178,21 +178,22 @@ module "svc_authz" {
   runtime_service_account = data.google_service_account.svc_authz_sa.email
 
   env_vars = {
-    GCP_PROJECT_ID      = var.project_id
-    FIREBASE_PROJECT_ID = var.project_id
-    NODE_ENV            = "production"
-    LOG_LEVEL           = "info"
+    GCP_PROJECT_ID       = var.project_id
+    FIREBASE_PROJECT_ID  = var.project_id
+    NODE_ENV             = "production"
+    LOG_LEVEL            = "info"
+    ENFORCE_INVITE_EMAIL = "true"
   }
 
-  cpu                     = "1"
-  memory                  = "1Gi"
-  min_instances          = 0
-  max_instances          = 10
-  container_concurrency  = 80
-  port                   = 8080
-  ingress                = "INGRESS_TRAFFIC_ALL"
-  execution_environment  = "EXECUTION_ENVIRONMENT_GEN2"
-  enable_public_invoker  = true
+  cpu                   = "1"
+  memory                = "1Gi"
+  min_instances         = 0
+  max_instances         = 10
+  container_concurrency = 80
+  port                  = 8080
+  ingress               = "INGRESS_TRAFFIC_ALL"
+  execution_environment = "EXECUTION_ENVIRONMENT_GEN2"
+  enable_public_invoker = true
 }
 
 # API Gateway Service
@@ -214,15 +215,15 @@ module "svc_api_gateway" {
     SVC_AUTHZ_URL       = module.svc_authz.service_url
   }
 
-  cpu                     = "1"
-  memory                  = "1Gi"
-  min_instances          = 0
-  max_instances          = 10
-  container_concurrency  = 80
-  port                   = 8080
-  ingress                = "INGRESS_TRAFFIC_ALL"
-  execution_environment  = "EXECUTION_ENVIRONMENT_GEN2"
-  enable_public_invoker  = true
+  cpu                   = "1"
+  memory                = "1Gi"
+  min_instances         = 0
+  max_instances         = 10
+  container_concurrency = 80
+  port                  = 8080
+  ingress               = "INGRESS_TRAFFIC_ALL"
+  execution_environment = "EXECUTION_ENVIRONMENT_GEN2"
+  enable_public_invoker = true
 }
 
 # Infrastructure outputs

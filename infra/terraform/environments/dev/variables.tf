@@ -43,6 +43,12 @@ variable "svc_api_gateway_image" {
   default     = ""
 }
 
+variable "worker_subscriber_image" {
+  description = "Docker image for worker-subscriber service"
+  type        = string
+  default     = ""
+}
+
 # Monitoring variables
 variable "enable_monitoring_dashboards" {
   description = "Enable creation of monitoring dashboards"
