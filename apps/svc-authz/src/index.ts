@@ -11,6 +11,7 @@ import healthRoutes from './routes/health';
 import meRoutes from './routes/me';
 import tenantsRoutes from './routes/tenants';
 import tenantAccessRoutes from './routes/tenantAccess';
+import invitationsRoutes from './routes/invitations';
 import helmet from '@fastify/helmet';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
@@ -154,8 +155,7 @@ server.register(
     await server.register(meRoutes, { prefix: '/auth' });
     await server.register(tenantsRoutes, { prefix: '/auth' });
     await server.register(tenantAccessRoutes, { prefix: '/auth' });
-
-    // TODO: M3 - Add /v1/invitations endpoints
+    await server.register(invitationsRoutes, { prefix: '/auth' });
 
     server.get('/ping', async () => {
       return { message: 'AuthZ service v1 API' };
