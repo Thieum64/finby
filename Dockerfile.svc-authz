@@ -1,0 +1,49 @@
+# Build from monorepo root context
+FROM node:20-alpine AS deps
+WORKDIR /app
+COPY apps/svc-authz/package-docker.json package.json
+RUN npm install
+
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+# Copy local packages and build them first
+RUN mkdir -p node_modules/@hp
+COPY packages/lib-common ./node_modules/@hp/lib-common
+COPY packages/lib-firestore ./node_modules/@hp/lib-firestore
+# Build local packages so their dist/ directories exist
+RUN cd node_modules/@hp/lib-common && npm install && npx tsup
+RUN cd node_modules/@hp/lib-firestore && npm install && npx tsup
+# Copy service code
+COPY apps/svc-authz/src ./src
+COPY apps/svc-authz/tsconfig.json ./
+COPY apps/svc-authz/package.json ./
+# Create tsup config that bundles local packages
+RUN echo 'import { defineConfig } from "tsup";' > tsup.config.ts && \
+    echo 'export default defineConfig({' >> tsup.config.ts && \
+    echo '  entry: ["src/index.ts"],' >> tsup.config.ts && \
+    echo '  format: ["esm"],' >> tsup.config.ts && \
+    echo '  target: "node20",' >> tsup.config.ts && \
+    echo '  outDir: "dist",' >> tsup.config.ts && \
+    echo '  sourcemap: true,' >> tsup.config.ts && \
+    echo '  clean: true,' >> tsup.config.ts && \
+    echo '  minify: false,' >> tsup.config.ts && \
+    echo '  splitting: false,' >> tsup.config.ts && \
+    echo '  noExternal: ["@hp/lib-common", "@hp/lib-firestore"],' >> tsup.config.ts && \
+    echo '});' >> tsup.config.ts
+# Build with packages bundled
+RUN npx tsup
+
+FROM node:20-alpine AS runtime
+WORKDIR /app
+# Install curl for healthcheck
+RUN apk add --no-cache curl
+# Copy dependencies and built code
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+ENV NODE_ENV=production
+ENV PORT=8080
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:8080/health || exit 1
+CMD ["node","dist/index.js"]

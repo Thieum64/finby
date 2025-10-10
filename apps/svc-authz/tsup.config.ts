@@ -9,5 +9,5 @@ export default defineConfig({
   clean: true,
   minify: false,
   splitting: false,
-  external: ['@hp/lib-common', '@hp/lib-firestore'],
+  noExternal: ['@hp/lib-common', '@hp/lib-firestore'],
 });

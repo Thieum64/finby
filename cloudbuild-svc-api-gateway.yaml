@@ -1,0 +1,11 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'europe-west1-docker.pkg.dev/$PROJECT_ID/hp-dev/svc-api-gateway:$SHORT_SHA'
+      - '-f'
+      - 'Dockerfile.svc-api-gateway'
+      - '.'
+images:
+  - 'europe-west1-docker.pkg.dev/$PROJECT_ID/hp-dev/svc-api-gateway:$SHORT_SHA'

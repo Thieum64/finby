@@ -1,17 +1,19 @@
-# Build stage with Node.js dependencies
+# Build from monorepo root context
 FROM node:20-alpine AS deps
 WORKDIR /app
-COPY package-docker.json package.json
+COPY apps/svc-api-gateway/package-docker.json package.json
 RUN npm install
 
-# Build stage
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+# Copy service code
+COPY apps/svc-api-gateway/src ./src
+COPY apps/svc-api-gateway/tsconfig.json ./
+COPY apps/svc-api-gateway/tsup.config.ts ./
+# Build
 RUN npx tsup
 
-# Runtime stage
 FROM node:20-alpine AS runtime
 WORKDIR /app
 

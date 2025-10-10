@@ -1,0 +1,11 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-f'
+      - 'Dockerfile.svc-authz'
+      - '-t'
+      - 'europe-west1-docker.pkg.dev/hyperush-dev-250930115246/hp-dev/svc-authz:$SHORT_SHA'
+      - '.'
+images:
+  - 'europe-west1-docker.pkg.dev/hyperush-dev-250930115246/hp-dev/svc-authz:$SHORT_SHA'
