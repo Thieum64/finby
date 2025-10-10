@@ -132,6 +132,42 @@ paths:
         '404':
           $ref: '#/components/responses/NotFoundError'
 
+  /api/v1/auth/tenants/{tenantId}/roles:
+    get:
+      operationId: getTenantRoles
+      tags:
+        - tenants
+      summary: Get user roles for a specific tenant
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Ulid'
+        - $ref: '#/components/parameters/XRequestId'
+      responses:
+        '200':
+          description: User roles retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - tenantId
+                  - roles
+                properties:
+                  tenantId:
+                    $ref: '#/components/schemas/Ulid'
+                  roles:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Role'
+                    minItems: 1
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
 components:
   securitySchemes:
     bearerAuth:

@@ -72,6 +72,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/auth/tenants/{tenantId}/roles': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get user roles for a specific tenant */
+    get: operations['getTenantRoles'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -261,6 +278,36 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
+      };
+      403: components['responses']['ForbiddenError'];
+      404: components['responses']['NotFoundError'];
+    };
+  };
+  getTenantRoles: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Request ID for tracing (ULID format recommended) */
+        'x-request-id'?: components['parameters']['XRequestId'];
+      };
+      path: {
+        tenantId: components['schemas']['Ulid'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description User roles retrieved successfully */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            tenantId: components['schemas']['Ulid'];
+            roles: components['schemas']['Role'][];
+          };
+        };
       };
       403: components['responses']['ForbiddenError'];
       404: components['responses']['NotFoundError'];
