@@ -89,6 +89,58 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/auth/invitations': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Create a new tenant invitation */
+    post: operations['createInvitation'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/auth/invitations/{token}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get invitation details */
+    get: operations['getInvitation'];
+    put?: never;
+    post?: never;
+    /** Cancel an invitation */
+    delete: operations['cancelInvitation'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/auth/invitations/{token}/accept': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Accept a tenant invitation */
+    post: operations['acceptInvitation'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -279,6 +331,7 @@ export interface operations {
         };
         content?: never;
       };
+      400: components['responses']['ValidationError'];
       403: components['responses']['ForbiddenError'];
       404: components['responses']['NotFoundError'];
     };
@@ -309,8 +362,176 @@ export interface operations {
           };
         };
       };
+      400: components['responses']['ValidationError'];
       403: components['responses']['ForbiddenError'];
       404: components['responses']['NotFoundError'];
+    };
+  };
+  createInvitation: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Request ID for tracing (ULID format recommended) */
+        'x-request-id'?: components['parameters']['XRequestId'];
+        /** @description Idempotency key for safe retries */
+        'x-idempotency-key': components['parameters']['XIdempotencyKey'];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          tenantId: components['schemas']['Ulid'];
+          /** Format: email */
+          email: string;
+          role: components['schemas']['Role'];
+        };
+      };
+    };
+    responses: {
+      /** @description Invitation created successfully */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            token: string;
+            tenantId: components['schemas']['Ulid'];
+            /** Format: date-time */
+            expiresAt: string;
+          };
+        };
+      };
+      400: components['responses']['ValidationError'];
+      401: components['responses']['UnauthorizedError'];
+      403: components['responses']['ForbiddenError'];
+      409: components['responses']['ConflictError'];
+    };
+  };
+  getInvitation: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Request ID for tracing (ULID format recommended) */
+        'x-request-id'?: components['parameters']['XRequestId'];
+      };
+      path: {
+        token: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Invitation details retrieved successfully */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            tenantId: components['schemas']['Ulid'];
+            /** Format: email */
+            email: string;
+            role: components['schemas']['Role'];
+            /** @enum {string} */
+            status: 'PENDING';
+            /** Format: date-time */
+            expiresAt: string;
+          };
+        };
+      };
+      404: components['responses']['NotFoundError'];
+      /** @description Invitation expired or no longer valid */
+      410: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorResponse'];
+        };
+      };
+    };
+  };
+  cancelInvitation: {
+    parameters: {
+      query?: never;
+      header?: {
+        /** @description Request ID for tracing (ULID format recommended) */
+        'x-request-id'?: components['parameters']['XRequestId'];
+      };
+      path: {
+        token: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Invitation cancelled successfully */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['UnauthorizedError'];
+      403: components['responses']['ForbiddenError'];
+      404: components['responses']['NotFoundError'];
+    };
+  };
+  acceptInvitation: {
+    parameters: {
+      query?: never;
+      header: {
+        /** @description Request ID for tracing (ULID format recommended) */
+        'x-request-id'?: components['parameters']['XRequestId'];
+        /** @description Idempotency key for safe retries */
+        'x-idempotency-key': components['parameters']['XIdempotencyKey'];
+      };
+      path: {
+        token: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Invitation already accepted (idempotent) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            tenantId: components['schemas']['Ulid'];
+            roles: components['schemas']['Role'][];
+          };
+        };
+      };
+      /** @description Invitation accepted successfully (first time) */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            tenantId: components['schemas']['Ulid'];
+            roles: components['schemas']['Role'][];
+          };
+        };
+      };
+      401: components['responses']['UnauthorizedError'];
+      404: components['responses']['NotFoundError'];
+      409: components['responses']['ConflictError'];
+      /** @description Invitation expired or no longer valid */
+      410: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErrorResponse'];
+        };
+      };
     };
   };
 }

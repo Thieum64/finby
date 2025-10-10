@@ -20,6 +20,8 @@ tags:
     description: Authentication and user context
   - name: tenants
     description: Tenant management
+  - name: invitations
+    description: Tenant invitations and membership management
 
 paths:
   /api/v1/auth/health:
@@ -127,6 +129,8 @@ paths:
       responses:
         '200':
           description: User has access to tenant
+        '400':
+          $ref: '#/components/responses/ValidationError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
         '404':
@@ -163,10 +167,200 @@ paths:
                     items:
                       $ref: '#/components/schemas/Role'
                     minItems: 1
+        '400':
+          $ref: '#/components/responses/ValidationError'
         '403':
           $ref: '#/components/responses/ForbiddenError'
         '404':
           $ref: '#/components/responses/NotFoundError'
+
+  /api/v1/auth/invitations:
+    post:
+      operationId: createInvitation
+      tags:
+        - invitations
+      summary: Create a new tenant invitation
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XIdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - tenantId
+                - email
+                - role
+              properties:
+                tenantId:
+                  $ref: '#/components/schemas/Ulid'
+                email:
+                  type: string
+                  format: email
+                role:
+                  $ref: '#/components/schemas/Role'
+      responses:
+        '201':
+          description: Invitation created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - token
+                  - tenantId
+                  - expiresAt
+                properties:
+                  token:
+                    type: string
+                  tenantId:
+                    $ref: '#/components/schemas/Ulid'
+                  expiresAt:
+                    type: string
+                    format: date-time
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+
+  /api/v1/auth/invitations/{token}:
+    get:
+      operationId: getInvitation
+      tags:
+        - invitations
+      summary: Get invitation details
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/XRequestId'
+      responses:
+        '200':
+          description: Invitation details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - tenantId
+                  - email
+                  - role
+                  - status
+                  - expiresAt
+                properties:
+                  tenantId:
+                    $ref: '#/components/schemas/Ulid'
+                  email:
+                    type: string
+                    format: email
+                  role:
+                    $ref: '#/components/schemas/Role'
+                  status:
+                    type: string
+                    enum:
+                      - PENDING
+                  expiresAt:
+                    type: string
+                    format: date-time
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '410':
+          description: Invitation expired or no longer valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      operationId: cancelInvitation
+      tags:
+        - invitations
+      summary: Cancel an invitation
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/XRequestId'
+      responses:
+        '204':
+          description: Invitation cancelled successfully
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /api/v1/auth/invitations/{token}/accept:
+    post:
+      operationId: acceptInvitation
+      tags:
+        - invitations
+      summary: Accept a tenant invitation
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XIdempotencyKey'
+      responses:
+        '201':
+          description: Invitation accepted successfully (first time)
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - tenantId
+                  - roles
+                properties:
+                  tenantId:
+                    $ref: '#/components/schemas/Ulid'
+                  roles:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Role'
+        '200':
+          description: Invitation already accepted (idempotent)
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - tenantId
+                  - roles
+                properties:
+                  tenantId:
+                    $ref: '#/components/schemas/Ulid'
+                  roles:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Role'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '409':
+          $ref: '#/components/responses/ConflictError'
+        '410':
+          description: Invitation expired or no longer valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
 components:
   securitySchemes:
