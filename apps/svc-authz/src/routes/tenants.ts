@@ -64,7 +64,7 @@ const tenantsRoutes: FastifyPluginAsync = async (fastify) => {
       const { name } = parseResult.data;
       const uid = request.user.uid;
 
-      // Calculate body hash
+      // Calculate bodyHash
       const bodyHash = createHash('sha256')
         .update(JSON.stringify({ name }))
         .digest('hex');
@@ -113,7 +113,7 @@ const tenantsRoutes: FastifyPluginAsync = async (fastify) => {
       } catch (error) {
         if (error instanceof IdempotencyConflictError) {
           return reply.status(409).send({
-            code: 'ALREADY_EXISTS',
+            code: 'CONFLICT',
             message: error.message,
           });
         }

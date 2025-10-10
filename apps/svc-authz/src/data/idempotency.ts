@@ -34,7 +34,7 @@ export async function withIdempotency<T>(
   if (doc.exists) {
     const data = doc.data();
     if (data) {
-      // Check if bodyHash differs when provided
+      // Check bodyHash if provided
       if (opts?.bodyHash && data.bodyHash && opts.bodyHash !== data.bodyHash) {
         throw new IdempotencyConflictError(
           'idempotency-key reused with different payload'
