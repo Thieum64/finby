@@ -1,7 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { ulid } from 'ulid';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { validateIdempotencyKey } from '@hp/lib-common';
 import {
   TenantsRepo,
@@ -14,6 +13,7 @@ import {
   IdempotencyConflictError,
 } from '../data/idempotency.js';
 import { Invitation } from '../domain/invitations.js';
+import { env } from '../index.js';
 
 const createInvitationSchema = z.object({
   tenantId: z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}$/, 'Invalid ULID format'),
@@ -103,9 +103,9 @@ const invitationsRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Calculate bodyHash
+      // Calculate bodyHash with operation scope
       const bodyHash = createHash('sha256')
-        .update(JSON.stringify({ tenantId, email, role }))
+        .update(JSON.stringify({ op: 'create-invite', tenantId, email, role }))
         .digest('hex');
 
       // Execute with idempotency
@@ -113,7 +113,7 @@ const invitationsRoutes: FastifyPluginAsync = async (fastify) => {
         const { fromCache, result } = await withIdempotency(
           idempotencyKey,
           async () => {
-            const token = ulid();
+            const token = randomBytes(32).toString('base64url');
             const createdAt = new Date().toISOString();
             const expiresAt = new Date(
               Date.now() + INVITATION_VALIDITY_DAYS * 24 * 60 * 60 * 1000
@@ -264,8 +264,10 @@ const invitationsRoutes: FastifyPluginAsync = async (fastify) => {
 
       const uid = request.user.uid;
 
-      // Calculate bodyHash (empty payload for accept)
-      const bodyHash = createHash('sha256').update('{}').digest('hex');
+      // Calculate bodyHash with operation scope
+      const bodyHash = createHash('sha256')
+        .update(JSON.stringify({ op: 'accept-invite', token }))
+        .digest('hex');
 
       try {
         const { fromCache, result } = await withIdempotency(
@@ -291,8 +293,15 @@ const invitationsRoutes: FastifyPluginAsync = async (fastify) => {
               throw new Error('NOT_PENDING');
             }
 
-            // TODO: Verify email match (invitation.email == request.user.email)
-            // For now, we skip this check as mentioned in requirements
+            // Verify email match if enforced
+            if (env.ENFORCE_INVITE_EMAIL === 'true') {
+              if (
+                !request.user?.email ||
+                request.user.email !== invitation.email
+              ) {
+                throw new Error('EMAIL_MISMATCH');
+              }
+            }
 
             const tenantId = invitation.tenantId;
             const role = invitation.role;
@@ -364,6 +373,25 @@ const invitationsRoutes: FastifyPluginAsync = async (fastify) => {
             return reply.status(410).send({
               code: 'GONE',
               message: 'Invitation expired or no longer valid',
+            });
+          }
+
+          if (error.message === 'EMAIL_MISMATCH') {
+            request.log.warn(
+              {
+                reqId: request.headers['x-request-id'],
+                uid,
+                token,
+                expectedEmail: 'REDACTED',
+                actualEmail: request.user?.email,
+                action: 'accept_invitation',
+                outcome: 'email_mismatch',
+              },
+              'Email mismatch for invitation'
+            );
+            return reply.status(403).send({
+              code: 'FORBIDDEN',
+              message: 'Email mismatch for invitation',
             });
           }
         }
