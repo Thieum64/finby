@@ -521,6 +521,7 @@ export interface operations {
         };
       };
       401: components['responses']['UnauthorizedError'];
+      403: components['responses']['ForbiddenError'];
       404: components['responses']['NotFoundError'];
       409: components['responses']['ConflictError'];
       /** @description Invitation expired or no longer valid */

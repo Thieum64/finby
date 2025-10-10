@@ -13,7 +13,7 @@ import {
   IdempotencyConflictError,
 } from '../data/idempotency.js';
 import { Invitation } from '../domain/invitations.js';
-import { env } from '../index.js';
+import { env } from '../config/env.js';
 
 const createInvitationSchema = z.object({
   tenantId: z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}$/, 'Invalid ULID format'),

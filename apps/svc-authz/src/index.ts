@@ -15,29 +15,21 @@ import invitationsRoutes from './routes/invitations';
 import helmet from '@fastify/helmet';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
+import { env } from './config/env.js';
 
-// Environment validation (NOTE: PORT is provided by Cloud Run, never set manually)
-const envSchema = z.object({
+// Local server environment (PORT is provided by Cloud Run, never set manually)
+const serverEnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('production'),
   PORT: z.coerce.number().default(8080),
-  LOG_LEVEL: z
-    .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
-    .default('info'),
-  GCP_PROJECT_ID: z.string().default('hyperush-dev-250930115246'),
-  FIREBASE_PROJECT_ID: z.string().default('hyperush-dev-250930115246'),
-  ENFORCE_INVITE_EMAIL: z.enum(['true', 'false']).default('true'),
 });
 
-const env = envSchema.parse(process.env);
-
-// Export env for use in routes
-export { env };
+const serverEnv = serverEnvSchema.parse(process.env);
 
 const server = fastify({
   logger: {
     level: env.LOG_LEVEL,
     // JSON logs for production, pretty for development
-    ...(env.NODE_ENV === 'production'
+    ...(serverEnv.NODE_ENV === 'production'
       ? {}
       : { transport: { target: 'pino-pretty' } }),
   },
@@ -104,7 +96,8 @@ const registerPlugins = async () => {
   });
 
   await server.register(cors, {
-    origin: env.NODE_ENV === 'development' ? ['http://localhost:3000'] : false,
+    origin:
+      serverEnv.NODE_ENV === 'development' ? ['http://localhost:3000'] : false,
   });
 
   await server.register(rateLimit, {
@@ -122,7 +115,7 @@ server.get('/', async (request, _reply) => {
     version: '0.1.0',
     time: new Date().toISOString(),
     reqId,
-    env: env.NODE_ENV,
+    env: serverEnv.NODE_ENV,
   };
 });
 
@@ -298,14 +291,14 @@ const start = async () => {
     await registerPlugins();
 
     await server.listen({
-      port: env.PORT,
+      port: serverEnv.PORT,
       host: '0.0.0.0',
     });
 
     server.log.info(
       {
-        port: env.PORT,
-        env: env.NODE_ENV,
+        port: serverEnv.PORT,
+        env: serverEnv.NODE_ENV,
       },
       'Server started successfully'
     );
