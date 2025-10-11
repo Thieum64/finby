@@ -754,3 +754,154 @@ Service account `svc-authz-sa@hyperush-dev-250930115246.iam.gserviceaccount.com`
 - ✅ Permissions IAM cross-project configurées
 - ✅ Monorepo build process établi
 - ✅ Firestore TTL et index actifs
+
+---
+
+## Phase 1.2 - Drift protection & CI smoke (Phase 1 hardening)
+
+**Date**: 2025-10-11
+**Status**: ✅ COMPLETE
+
+### Terraform Drift Elimination
+
+**Configuration finalisée et codifiée:**
+
+1. **FIREBASE_PROJECT_ID géré par Terraform**
+
+```hcl
+# infra/terraform/environments/dev/variables.tf
+variable "firebase_project_id" {
+  type        = string
+  description = "Firebase project id (not the numeric GCP project)"
+}
+
+# infra/terraform/environments/dev/terraform.tfvars
+firebase_project_id = "hyperush-dev"
+
+# infra/terraform/environments/dev/main.tf (svc_authz env_vars)
+FIREBASE_PROJECT_ID = var.firebase_project_id  # ✅ hyperush-dev
+```
+
+**Résultat**: Variable d'environnement fixée via IaC, plus de drift manuel
+
+2. **IAM cross-project géré par Terraform**
+
+```hcl
+# Provider alias pour Firebase project
+provider "google" {
+  alias   = "firebase"
+  project = var.firebase_project_id
+  region  = var.region
+}
+
+# Permissions cross-project
+resource "google_project_iam_member" "firebase_auth_admin" {
+  provider = google.firebase
+  project  = var.firebase_project_id
+  role     = "roles/firebaseauth.admin"
+  member   = "serviceAccount:svc-authz-sa@hyperush-dev-250930115246.iam.gserviceaccount.com"
+}
+
+resource "google_project_iam_member" "firebase_datastore_user" {
+  provider = google.firebase
+  project  = var.firebase_project_id
+  role     = "roles/datastore.user"
+  member   = "serviceAccount:svc-authz-sa@hyperush-dev-250930115246.iam.gserviceaccount.com"
+}
+```
+
+**Résultat**: Permissions IAM gérées dans le code, reproductibles
+
+3. **Images Docker fixées**
+
+```hcl
+# infra/terraform/environments/dev/terraform.tfvars
+svc_authz_image       = "europe-west1-docker.pkg.dev/hyperush-dev-250930115246/hp-dev/svc-authz:b275859-final"
+svc_api_gateway_image = "europe-west1-docker.pkg.dev/hyperush-dev-250930115246/hp-dev/svc-api-gateway:b275859"
+```
+
+**Résultat**: Images déployées correspondent à l'état Terraform
+
+### Terraform Apply Success
+
+```bash
+terraform apply -auto-approve
+
+Apply complete! Resources: 2 added, 2 changed, 0 destroyed.
+```
+
+**Changements appliqués:**
+
+- ✅ 2 ressources IAM ajoutées (firebaseauth.admin + datastore.user sur hyperush-dev)
+- ✅ svc-authz mis à jour avec FIREBASE_PROJECT_ID=hyperush-dev
+- ✅ svc-api-gateway mis à jour avec env vars complètes
+- ✅ Aucune destruction, aucun downtime
+
+### CI/CD Protected Endpoint Testing
+
+**Workflow ajouté**: `.github/workflows/e2e-authz-smoke.yml`
+
+**Fonctionnalités:**
+
+- Déclenché sur push (main) ou manuellement (workflow_dispatch)
+- Test public: `GET /api/v1/auth/health` → valide service accessible
+- Test protégé: `GET /api/v1/auth/me` avec JWT Firebase → valide authentication
+- Support secrets repository ou inputs manuels
+- Échec si endpoint protégé retourne != 200
+
+**Configuration recommandée** (GitHub repository secrets):
+
+```
+FIREBASE_API_KEY = AIzaSyCAkDhyGKscztK-t-uBJIewecgdj6LzZXU
+TEST_EMAIL = liontimeo@gmail.com
+TEST_PASSWORD = ****** (masked)
+```
+
+**Test local immédiat:**
+
+```bash
+curl -H "Authorization: Bearer $JWT" https://svc-api-gateway-2gc7gddpva-ew.a.run.app/api/v1/auth/me
+
+Response:
+{
+  "uid": "yEtDsj8qGwgiPFPgr330IwcyMQx2",
+  "email": "liontimeo@gmail.com",
+  "tenants": []
+}
+
+Status: ✅ 200 OK
+```
+
+### Vérifications post-apply
+
+**Environment Variables (svc-authz):**
+
+```bash
+gcloud run services describe svc-authz --region europe-west1
+
+ENFORCE_INVITE_EMAIL = true ✅
+FIREBASE_PROJECT_ID  = hyperush-dev ✅ (changed from hyperush-dev-250930115246)
+GCP_PROJECT_ID       = hyperush-dev-250930115246 ✅
+LOG_LEVEL            = info ✅
+NODE_ENV             = production ✅
+```
+
+**IAM Bindings (projet hyperush-dev):**
+
+```bash
+svc-authz-sa@hyperush-dev-250930115246.iam.gserviceaccount.com:
+  - roles/firebaseauth.admin ✅
+  - roles/datastore.user ✅
+```
+
+### Status Final
+
+**Phase 1.2: ✅ TOTALLY COMPLETE**
+
+- ✅ FIREBASE_PROJECT_ID géré par Terraform (hyperush-dev)
+- ✅ IAM cross-project géré par Terraform (2 bindings créés)
+- ✅ Terraform apply successful (2 added, 2 changed, 0 destroyed)
+- ✅ Images Docker figées dans terraform.tfvars
+- ✅ CI e2e-authz-smoke workflow créé et testé localement
+- ✅ Protected endpoint /me validé → 200 OK avec JWT
+- ✅ Aucun drift résiduel, configuration entièrement dans IaC
