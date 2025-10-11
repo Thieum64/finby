@@ -1,9 +1,10 @@
 # Dev Environment Configuration
 project_id              = "hyperush-dev-250930115246"
 region                  = "europe-west1"
+firebase_project_id     = "hyperush-dev"
 runtime_service_account = "svc-authz-sa@hyperush-dev-250930115246.iam.gserviceaccount.com"
-svc_authz_image         = "europe-west1-docker.pkg.dev/hyperush-dev-250930115246/hp-dev/svc-authz:271d7203731b"
+svc_authz_image         = "europe-west1-docker.pkg.dev/hyperush-dev-250930115246/hp-dev/svc-authz:b275859-final"
 enable_metrics          = true
 enable_error_sink       = false
-svc_api_gateway_image   = "europe-west1-docker.pkg.dev/hyperush-dev-250930115246/hp-dev/svc-api-gateway:ac3767aa1c51"
+svc_api_gateway_image   = "europe-west1-docker.pkg.dev/hyperush-dev-250930115246/hp-dev/svc-api-gateway:b275859"
 worker_subscriber_image = "europe-west1-docker.pkg.dev/hyperush-dev-250930115246/hp-dev/worker-subscriber:ac3767a"

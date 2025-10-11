@@ -1,0 +1,73 @@
+name: e2e-authz-smoke
+on:
+  workflow_dispatch:
+    inputs:
+      firebase_api_key:
+        description: Optional Firebase API Key (overrides secret)
+        required: false
+      test_email:
+        description: Optional test email (overrides secret)
+        required: false
+      test_password:
+        description: Optional test password (overrides secret)
+        required: false
+  push:
+    branches: ['main']
+    paths:
+      - 'apps/svc-authz/**'
+      - 'apps/svc-api-gateway/**'
+      - 'infra/**'
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    env:
+      GATEWAY_URL: https://svc-api-gateway-2gc7gddpva-ew.a.run.app
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install deps
+        run: npm ci
+      - name: Get Firebase JWT
+        id: jwt
+        env:
+          API_KEY_IN: ${{ github.event.inputs.firebase_api_key }}
+          EMAIL_IN: ${{ github.event.inputs.test_email }}
+          PASSWORD_IN: ${{ github.event.inputs.test_password }}
+          API_KEY_SEC: ${{ secrets.FIREBASE_API_KEY }}
+          EMAIL_SEC: ${{ secrets.TEST_EMAIL }}
+          PASSWORD_SEC: ${{ secrets.TEST_PASSWORD }}
+        run: |
+          API_KEY="${API_KEY_IN:-$API_KEY_SEC}"
+          EMAIL="${EMAIL_IN:-$EMAIL_SEC}"
+          PASSWORD="${PASSWORD_IN:-$PASSWORD_SEC}"
+          if [ -z "$API_KEY" ] || [ -z "$EMAIL" ] || [ -z "$PASSWORD" ]; then
+            echo "JWT_SKIPPED=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          JWT=$(curl -s -X POST "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=$API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\",\"returnSecureToken\":true}" | jq -r '.idToken')
+          if [ -z "$JWT" ] || [ "$JWT" = "null" ]; then
+            echo "Failed to obtain JWT"; exit 1
+          fi
+          echo "JWT_SKIPPED=false" >> $GITHUB_OUTPUT
+          echo "JWT=$JWT" >> $GITHUB_OUTPUT
+      - name: Public health
+        run: |
+          curl -sS "$GATEWAY_URL/api/v1/auth/health" | jq .
+      - name: Protected /me
+        if: steps.jwt.outputs.JWT_SKIPPED == 'false'
+        env:
+          JWT: ${{ steps.jwt.outputs.JWT }}
+        run: |
+          set -e
+          RES=$(curl -sS -w "\nHTTP:%{http_code}\n" -H "Authorization: Bearer $JWT" "$GATEWAY_URL/api/v1/auth/me")
+          echo "$RES"
+          CODE=$(echo "$RES" | tail -n1 | cut -d: -f2)
+          [ "$CODE" = "200" ] || (echo "Protected /me failed with HTTP $CODE" && exit 1)
+      - name: Note if JWT skipped
+        if: steps.jwt.outputs.JWT_SKIPPED == 'true'
+        run: echo "JWT not provided; protected test skipped (set repository secrets FIREBASE_API_KEY, TEST_EMAIL, TEST_PASSWORD or provide workflow inputs)."

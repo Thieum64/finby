@@ -21,6 +21,13 @@ provider "google" {
   region  = var.region
 }
 
+# Provider for Firebase project (cross-project IAM)
+provider "google" {
+  alias   = "firebase"
+  project = var.firebase_project_id
+  region  = var.region
+}
+
 # Data sources
 data "google_project" "project" {
   project_id = var.project_id
@@ -39,6 +46,21 @@ data "google_service_account" "svc_authz_sa" {
 data "google_service_account" "svc_api_gateway_sa" {
   account_id = "svc-api-gateway-sa"
   project    = var.project_id
+}
+
+# Cross-project IAM bindings for svc-authz service account on Firebase project
+resource "google_project_iam_member" "firebase_auth_admin" {
+  provider = google.firebase
+  project  = var.firebase_project_id
+  role     = "roles/firebaseauth.admin"
+  member   = "serviceAccount:${data.google_service_account.svc_authz_sa.email}"
+}
+
+resource "google_project_iam_member" "firebase_datastore_user" {
+  provider = google.firebase
+  project  = var.firebase_project_id
+  role     = "roles/datastore.user"
+  member   = "serviceAccount:${data.google_service_account.svc_authz_sa.email}"
 }
 
 module "pubsub" {
@@ -179,7 +201,7 @@ module "svc_authz" {
 
   env_vars = {
     GCP_PROJECT_ID       = var.project_id
-    FIREBASE_PROJECT_ID  = var.project_id
+    FIREBASE_PROJECT_ID  = var.firebase_project_id
     NODE_ENV             = "production"
     LOG_LEVEL            = "info"
     ENFORCE_INVITE_EMAIL = "true"

@@ -74,3 +74,8 @@ variable "budget_alert_thresholds" {
   default     = [50, 80, 100]
 }
 
+variable "firebase_project_id" {
+  type        = string
+  description = "Firebase project id (not the numeric GCP project)"
+}
+
