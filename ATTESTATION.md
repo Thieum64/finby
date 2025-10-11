@@ -570,3 +570,147 @@ b275859 fix(build): monorepo Docker builds with package bundling
 - Full E2E SDK integration tests
 - Load testing and performance optimization
 - Monitoring dashboard and alerting setup
+
+---
+
+## Phase 1 – Validation endpoints protégés et pinning trafic
+
+**Date**: 2025-10-11
+**Status**: ⚠️ PARTIALLY COMPLETE - Configuration issue identified
+
+### Services déployés
+
+**URLs finales:**
+
+```
+svc-api-gateway: https://svc-api-gateway-2gc7gddpva-ew.a.run.app
+svc-authz:       https://svc-authz-2gc7gddpva-ew.a.run.app
+```
+
+**Révisions actives (100% trafic):**
+
+| Service         | Révision                  | Image Tag     | Digest                                                                  | Traffic |
+| --------------- | ------------------------- | ------------- | ----------------------------------------------------------------------- | ------- |
+| svc-api-gateway | svc-api-gateway-00014-2pc | b275859       | sha256:56cbbf7b83db528d00862917c67992b1fce4192f325090c648752c75cd04f492 | 100%    |
+| svc-authz       | svc-authz-00039-gnr       | b275859-final | sha256:98a342b5ed602910b2c3e253f56876c76c342d2842035b19ae6b36277c35cd36 | 100%    |
+
+### Tests de validation
+
+#### ✅ Endpoint public (health)
+
+```bash
+curl https://svc-api-gateway-2gc7gddpva-ew.a.run.app/api/v1/auth/health
+```
+
+**Résultat:**
+
+```json
+{
+  "ok": true,
+  "service": "svc-authz",
+  "version": "dev",
+  "authProvider": "firebase",
+  "projectId": "hyperush-dev-250930115246"
+}
+```
+
+**Status**: ✅ 200 OK
+
+#### ⚠️ Endpoint protégé (/me avec JWT)
+
+```bash
+curl -H "Authorization: Bearer $FIREBASE_JWT" https://svc-api-gateway-2gc7gddpva-ew.a.run.app/api/v1/auth/me
+```
+
+**Résultat:**
+
+```json
+{
+  "code": "UNAUTHORIZED",
+  "message": "User not authenticated"
+}
+```
+
+**Status**: ❌ 401 Unauthorized
+
+**Analyse JWT:**
+
+```json
+{
+  "aud": "hyperush-dev",
+  "iss": "https://securetoken.google.com/hyperush-dev",
+  "user_id": "yEtDsj8qGwgiPFPgr330IwcyMQx2",
+  "email": "liontimeo@gmail.com",
+  "exp": 1760192366
+}
+```
+
+#### 🔧 Problème identifié
+
+**Configuration mismatch:**
+
+- JWT généré pour projet Firebase: `hyperush-dev`
+- Service configuré avec: `FIREBASE_PROJECT_ID=hyperush-dev-250930115246`
+
+**Impact:** Le service rejette les JWTs valides car il attend un projet Firebase différent.
+
+**Correction recommandée:**
+
+```bash
+gcloud run services update svc-authz \
+  --region europe-west1 \
+  --update-env-vars FIREBASE_PROJECT_ID=hyperush-dev
+```
+
+### Tests SDK
+
+**Commande:**
+
+```bash
+GATEWAY_URL="https://svc-api-gateway-2gc7gddpva-ew.a.run.app" JWT="<firebase-jwt>" node scripts/smoke-sdk-authz.mjs
+```
+
+**Résultats:**
+
+- ✅ `health()` - GET /api/v1/auth/health → PASS
+- ❌ `me()` - GET /api/v1/auth/me → FAIL (401 - JWT project mismatch)
+- ⏭️ `checkTenantAccess()` - Skipped (TENANT_ID not provided)
+- ⏭️ `getTenantRoles()` - Skipped (TENANT_ID not provided)
+
+### Infrastructure vérifiée
+
+**Environment Variables (svc-authz):**
+
+```
+GCP_PROJECT_ID=hyperush-dev-250930115246
+FIREBASE_PROJECT_ID=hyperush-dev-250930115246  ⚠️ Should be "hyperush-dev"
+NODE_ENV=production
+LOG_LEVEL=info
+ENFORCE_INVITE_EMAIL=true ✅
+```
+
+**Firestore:**
+
+- TTL: Configuration présumée ACTIVE (alpha component non accessible)
+- Composite Index: READY (ID: CICAgOjXh4EK)
+
+### Status final
+
+**Phase 1 Infrastructure: ✅ COMPLETE**
+
+- ✅ Services déployés avec images correctes
+- ✅ Gateway routing fonctionnel (rewritePrefix working)
+- ✅ Trafic pinné à 100% sur révisions testées
+- ✅ Endpoints publics validés (200 OK)
+- ✅ Monorepo build process établi
+
+**Phase 1 Authentication: ⚠️ REQUIRES FIX**
+
+- ⚠️ FIREBASE_PROJECT_ID mismatch empêche validation JWT
+- ⚠️ Endpoints protégés non validés (401 dû à config)
+
+**Action requise pour complétion:**
+
+1. Corriger `FIREBASE_PROJECT_ID` dans svc-authz → `hyperush-dev`
+2. Redéployer et re-tester `/me` avec JWT
+3. Valider retour 200 OK avec userId et email
