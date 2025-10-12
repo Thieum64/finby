@@ -25,6 +25,7 @@ pnpm dev
 ## 🏗️ Architecture
 
 ### Services
+
 - **Web** (`apps/web`) - Next.js frontend application
 - **API Gateway** (`apps/api-gateway`) - BFF with rate limiting and auth
 - **svc-authz** (`apps/svc-authz`) - Authentication & Authorization
@@ -38,9 +39,11 @@ pnpm dev
 - **svc-admin** (`apps/svc-admin`) - Platform administration
 
 ### Workers
+
 - **worker-e2e** (`workers/worker-e2e`) - End-to-end testing jobs (Go)
 
 ### Packages
+
 - **lib-common** - ULID, errors, idempotency, correlation
 - **lib-firestore** - Multi-tenant Firestore repositories
 - **lib-shopify** - Shopify API client with rate limiting
@@ -51,6 +54,7 @@ pnpm dev
 ## 🛠️ Development
 
 ### Prerequisites
+
 - Node.js 20+
 - pnpm 9+
 - Google Cloud SDK
@@ -58,6 +62,7 @@ pnpm dev
 - Terraform
 
 ### Environment Setup
+
 ```bash
 # Copy environment files
 cp apps/svc-authz/.env.example apps/svc-authz/.env
@@ -67,6 +72,7 @@ direnv allow
 ```
 
 ### Running Services
+
 ```bash
 # All services
 pnpm dev
@@ -88,14 +94,16 @@ pnpm format
 ## 🚢 Deployment
 
 ### GitHub Actions Variables
+
 Configure these in your repository settings:
 
 - `GCP_PROJECT_ID` - GCP project ID
-- `GCP_REGION` - Deployment region (europe-west1)  
+- `GCP_REGION` - Deployment region (europe-west1)
 - `GCP_SERVICE_ACCOUNT` - Deploy service account email
 - `GCP_WORKLOAD_IDP` - Workload Identity Provider
 
 ### Manual Deployment
+
 ```bash
 # Deploy specific service
 cd infra/terraform/environments/dev
@@ -104,6 +112,7 @@ terraform apply -target=module.svc_authz
 ```
 
 ### Infrastructure
+
 - **GCP Cloud Run** - Containerized services
 - **Firestore** - Multi-tenant document database
 - **Pub/Sub** - Event-driven orchestration
@@ -135,9 +144,20 @@ pnpm test
 # Coverage
 pnpm test:coverage
 
-# E2E tests  
+# E2E tests
 pnpm test:e2e
 ```
+
+## 🌐 Web Preview
+
+[![Web Preview](https://github.com/thieum64/finby/actions/workflows/web-preview.yml/badge.svg)](https://github.com/thieum64/finby/actions/workflows/web-preview.yml)
+
+Interactive web client for testing API endpoints directly from your browser:
+
+- **Live Preview**: [https://thieum64.github.io/finby/](https://thieum64.github.io/finby/)
+- Firebase authentication integration
+- Test endpoints: Health, Me, Tenants, Roles, Check Access, Accept Invite
+- No server dependencies - fully static
 
 ## 📚 Documentation
 
@@ -174,7 +194,7 @@ infra/                 # Infrastructure as code
 └── terraform/         # Terraform modules
 
 ops/                   # Operations
-├── dashboards/        # Monitoring dashboards  
+├── dashboards/        # Monitoring dashboards
 ├── runbooks/          # Incident response
 └── alerts.json        # Alert configurations
 ```
@@ -182,7 +202,7 @@ ops/                   # Operations
 ## 🎯 Roadmap
 
 - **M0** ✅ - Project bootstrap, svc-authz deployment
-- **M1** - OpenTelemetry, logging, basic observability  
+- **M1** - OpenTelemetry, logging, basic observability
 - **M2** - Firebase Auth, tenant management, RBAC
 - **M3** - Shopify OAuth, shop management
 - **M4** - Request processing, job orchestration
