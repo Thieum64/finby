@@ -8,3 +8,4 @@ enable_metrics          = true
 enable_error_sink       = false
 svc_api_gateway_image   = "europe-west1-docker.pkg.dev/hyperush-dev-250930115246/hp-dev/svc-api-gateway:b275859"
 worker_subscriber_image = "europe-west1-docker.pkg.dev/hyperush-dev-250930115246/hp-dev/worker-subscriber:ac3767a"
+cors_allowed_origins    = "https://thieum64.github.io"

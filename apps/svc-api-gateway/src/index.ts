@@ -21,6 +21,10 @@ const envSchema = z.object({
     .string()
     .url('SVC_AUTHZ_URL must be a valid URL')
     .refine((url) => url.length > 0, 'SVC_AUTHZ_URL cannot be empty'),
+  CORS_ALLOWED_ORIGINS: z
+    .string()
+    .optional()
+    .transform((val) => (val ? val.split(',').map((s) => s.trim()) : [])),
 });
 
 const env = envSchema.parse(process.env);
@@ -95,8 +99,24 @@ const registerPlugins = async () => {
     },
   });
 
+  // Configure CORS based on environment
+  const corsOrigins =
+    env.NODE_ENV === 'development'
+      ? ['http://localhost:3000']
+      : env.CORS_ALLOWED_ORIGINS.length > 0
+        ? env.CORS_ALLOWED_ORIGINS
+        : false;
+
   await server.register(import('@fastify/cors'), {
-    origin: env.NODE_ENV === 'development' ? ['http://localhost:3000'] : false,
+    origin: corsOrigins,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'x-tenant-id',
+      'x-request-id',
+    ],
   });
 
   await server.register(import('@fastify/rate-limit'), {

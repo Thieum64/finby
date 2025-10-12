@@ -79,3 +79,9 @@ variable "firebase_project_id" {
   description = "Firebase project id (not the numeric GCP project)"
 }
 
+variable "cors_allowed_origins" {
+  type        = string
+  description = "Comma-separated list of allowed CORS origins for API Gateway"
+  default     = ""
+}
+

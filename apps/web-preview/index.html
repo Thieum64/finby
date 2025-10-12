@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hyperush API Preview</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #667eea;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .status-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 16px;
+            padding: 12px;
+            background: #f7fafc;
+            border-radius: 8px;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #e53e3e;
+        }
+
+        .status-indicator.connected {
+            background: #48bb78;
+        }
+
+        .status-text {
+            font-size: 14px;
+            font-weight: 500;
+            color: #2d3748;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .card h2 {
+            color: #2d3748;
+            margin-bottom: 16px;
+            font-size: 18px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            color: #4a5568;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #5a67d8;
+        }
+
+        button:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+        }
+
+        .button-secondary {
+            background: #718096;
+            margin-left: 8px;
+        }
+
+        .button-secondary:hover {
+            background: #4a5568;
+        }
+
+        .button-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .button-group button {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .response-container {
+            margin-top: 16px;
+        }
+
+        .response-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .response-header h3 {
+            color: #2d3748;
+            font-size: 14px;
+        }
+
+        .copy-btn {
+            padding: 4px 12px;
+            font-size: 12px;
+        }
+
+        pre {
+            background: #1a202c;
+            color: #68d391;
+            padding: 16px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.5;
+            max-height: 400px;
+        }
+
+        .error {
+            color: #e53e3e;
+        }
+
+        .success {
+            color: #48bb78;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .info-box {
+            background: #ebf4ff;
+            border-left: 4px solid #4299e1;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+            font-size: 14px;
+            color: #2c5282;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Hyperush API Preview</h1>
+            <p>Test your API endpoints directly from your browser</p>
+            <div class="status-bar">
+                <div class="status-indicator" id="statusIndicator"></div>
+                <span class="status-text" id="statusText">Not connected</span>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div>
+                <div class="card">
+                    <h2>⚙️ Configuration</h2>
+                    <div class="form-group">
+                        <label for="gatewayUrl">Gateway URL</label>
+                        <input type="text" id="gatewayUrl" value="https://svc-api-gateway-2gc7gddpva-ew.a.run.app">
+                    </div>
+                    <div class="info-box">
+                        Firebase credentials are pre-configured. Click "Sign In" to authenticate.
+                    </div>
+                    <button onclick="signIn()">🔑 Sign In</button>
+                    <button class="button-secondary" onclick="signOut()">Sign Out</button>
+                </div>
+
+                <div class="card">
+                    <h2>🧪 Test Endpoints</h2>
+                    <div class="button-group">
+                        <button onclick="testHealth()">Health</button>
+                        <button onclick="testMe()" id="btnMe" disabled>Me</button>
+                        <button onclick="testTenants()" id="btnTenants" disabled>Tenants</button>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="tenantId">Tenant ID (for Roles/Check Access)</label>
+                        <input type="text" id="tenantId" placeholder="Enter tenant ID">
+                    </div>
+
+                    <div class="button-group">
+                        <button onclick="testRoles()" id="btnRoles" disabled>Get Roles</button>
+                        <button onclick="testCheckAccess()" id="btnCheckAccess" disabled>Check Access</button>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="action">Action (for Check Access)</label>
+                        <input type="text" id="action" placeholder="e.g., read:documents" value="read:documents">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="inviteToken">Invite Token (for Accept Invite)</label>
+                        <input type="text" id="inviteToken" placeholder="Enter invite token">
+                    </div>
+
+                    <button onclick="testAcceptInvite()" id="btnAcceptInvite" disabled>Accept Invite</button>
+                </div>
+            </div>
+
+            <div>
+                <div class="card">
+                    <div class="response-header">
+                        <h2>📥 Response</h2>
+                        <button class="copy-btn" onclick="copyResponse()">Copy</button>
+                    </div>
+                    <div class="response-container">
+                        <pre id="response">No response yet. Try testing an endpoint!</pre>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>📝 Request Details</h2>
+                    <div class="response-container">
+                        <pre id="requestDetails">No request sent yet.</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
