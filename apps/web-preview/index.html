@@ -232,8 +232,13 @@
                         <label for="gatewayUrl">Gateway URL</label>
                         <input type="text" id="gatewayUrl" value="https://svc-api-gateway-2gc7gddpva-ew.a.run.app">
                     </div>
-                    <div class="info-box">
-                        Firebase credentials are pre-configured. Click "Sign In" to authenticate.
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" placeholder="Enter your email">
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" placeholder="Enter your password">
                     </div>
                     <button onclick="signIn()">🔑 Sign In</button>
                     <button class="button-secondary" onclick="signOut()">Sign Out</button>

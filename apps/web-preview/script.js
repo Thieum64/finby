@@ -2,8 +2,6 @@
 const CONFIG = {
   firebaseApiKey: 'AIzaSyCAkDhyGKscztK-t-uBJIewecgdj6LzZXU',
   firebaseProjectId: 'hyperush-dev',
-  testEmail: 'liontimeo@gmail.com',
-  testPassword: 'Victorcosta64H!',
 };
 
 let idToken = null;
@@ -71,21 +69,30 @@ async function signIn() {
     updateStatus(false, 'Signing in...');
     displayResponse({ status: 'Authenticating with Firebase...' });
 
+    // Read credentials from form inputs
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+
+    if (!email || !password) {
+      throw new Error('Please enter both email and password');
+    }
+
     const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${CONFIG.firebaseApiKey}`;
 
     const body = {
-      email: CONFIG.testEmail,
-      password: CONFIG.testPassword,
+      email,
+      password,
       returnSecureToken: true,
     };
 
+    // Display request WITHOUT showing credentials
     displayRequest(
       'POST',
       url,
       {
         'Content-Type': 'application/json',
       },
-      { email: CONFIG.testEmail, password: '***' }
+      { email: email, password: '***' }
     );
 
     const response = await fetch(url, {
