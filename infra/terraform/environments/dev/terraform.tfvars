@@ -6,6 +6,6 @@ runtime_service_account = "svc-authz-sa@hyperush-dev-250930115246.iam.gserviceac
 svc_authz_image         = "europe-west1-docker.pkg.dev/hyperush-dev-250930115246/hp-dev/svc-authz:b275859-final"
 enable_metrics          = true
 enable_error_sink       = false
-svc_api_gateway_image   = "europe-west1-docker.pkg.dev/hyperush-dev-250930115246/hp-dev/svc-api-gateway:b275859"
+svc_api_gateway_image   = "europe-west1-docker.pkg.dev/hyperush-dev-250930115246/hp-dev/svc-api-gateway:final-20251013-000341"
 worker_subscriber_image = "europe-west1-docker.pkg.dev/hyperush-dev-250930115246/hp-dev/worker-subscriber:ac3767a"
 cors_allowed_origins    = "https://thieum64.github.io"
