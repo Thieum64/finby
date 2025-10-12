@@ -117,6 +117,7 @@ const registerPlugins = async () => {
       'x-tenant-id',
       'x-request-id',
     ],
+    maxAge: 600,
   });
 
   await server.register(import('@fastify/rate-limit'), {
