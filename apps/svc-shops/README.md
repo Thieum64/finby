@@ -1,26 +1,27 @@
 # svc-shops
 
-Shop management and configuration service
+Bootstrap Shopify connector service exposing foundational health endpoints.
 
 ## Development
 
 ```bash
-pnpm dev
+pnpm install
+pnpm --filter @hyperush/svc-shops dev
 ```
 
 ## Build
 
 ```bash
-pnpm build
+pnpm --filter @hyperush/svc-shops build
 ```
 
 ## Test
 
 ```bash
-pnpm test
+pnpm --filter @hyperush/svc-shops test
 ```
 
 ## API Endpoints
 
-- `GET /` - Service info
-- `GET /healthz` - Health check
+- `GET /v1/shops/health` — Service health payload for gateway proxying
+- `GET /health` — Runtime health check used by Cloud Run

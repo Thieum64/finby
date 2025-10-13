@@ -1,0 +1,31 @@
+{
+  "name": "@hp/lib-shopify",
+  "version": "0.1.0",
+  "type": "module",
+  "sideEffects": false,
+  "description": "Utilities for interacting with Shopify credentials and configuration",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "tsup": "^8.0.1",
+    "typescript": "^5.4.0",
+    "vitest": "^1.5.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
