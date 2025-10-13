@@ -18,6 +18,12 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      APP_URL: http://localhost:8080
+      SHOPIFY_API_KEY: dev_key
+      SHOPIFY_API_SECRET: dev_secret
+      SHOPIFY_SCOPES: read_products,write_products
+      SHOPIFY_WEBHOOK_SECRET: dev_webhook_secret
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -57,7 +63,7 @@ jobs:
       - name: HTTP smoke test
         run: |
           PORT=8080 node apps/svc-shops/dist/index.cjs &
-          sleep 3
-          curl -f http://localhost:8080/health
+          SERVER_PID=$!
+          timeout 20 bash -c 'until curl -fsS http://localhost:8080/health; do sleep 0.5; done'
           curl -f http://localhost:8080/v1/shops/health
-          pkill -f "node apps/svc-shops/dist/index.cjs" || true
+          kill $SERVER_PID || true
