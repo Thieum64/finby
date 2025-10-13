@@ -54,3 +54,11 @@ jobs:
 
       - name: Test lib-shopify
         run: pnpm --filter @hp/lib-shopify test -- --run
+
+      - name: HTTP smoke test
+        run: |
+          PORT=8080 node apps/svc-shops/dist/index.cjs &
+          sleep 3
+          curl -f http://localhost:8080/health
+          curl -f http://localhost:8080/v1/shops/health
+          pkill -f "node apps/svc-shops/dist/index.cjs" || true
