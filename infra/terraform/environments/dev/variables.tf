@@ -43,6 +43,12 @@ variable "svc_api_gateway_image" {
   default     = ""
 }
 
+variable "svc_shops_image" {
+  description = "Docker image for svc-shops service"
+  type        = string
+  default     = ""
+}
+
 variable "worker_subscriber_image" {
   description = "Docker image for worker-subscriber service"
   type        = string

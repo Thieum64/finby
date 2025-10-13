@@ -17,13 +17,6 @@ variable "stripe_secret_placeholder" {
   sensitive   = true
 }
 
-variable "shopify_webhook_secret_placeholder" {
-  description = "Placeholder value for Shopify webhook secret"
-  type        = string
-  default     = "shopify_placeholder_webhook_secret_phase_0"
-  sensitive   = true
-}
-
 variable "firebase_sa_json_placeholder" {
   description = "Placeholder value for Firebase service account JSON"
   type        = string

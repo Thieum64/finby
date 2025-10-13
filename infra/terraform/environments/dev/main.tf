@@ -75,6 +75,65 @@ module "secrets" {
   environment = "dev"
 }
 
+# Shopify connector secrets (empty placeholders, versions managed post-merge)
+resource "google_secret_manager_secret" "shopify_api_key" {
+  project   = var.project_id
+  secret_id = "shopify-api-key"
+
+  labels = {
+    environment = "dev"
+    component   = "shops"
+    type        = "api-key"
+  }
+
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret" "shopify_api_secret" {
+  project   = var.project_id
+  secret_id = "shopify-api-secret"
+
+  labels = {
+    environment = "dev"
+    component   = "shops"
+    type        = "api-secret"
+  }
+
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret" "shopify_webhook_secret" {
+  project   = var.project_id
+  secret_id = "shopify-webhook-secret"
+
+  labels = {
+    environment = "dev"
+    component   = "shops"
+    type        = "webhook-secret"
+  }
+
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_iam_member" "svc_shops_secret_accessor" {
+  for_each = {
+    api_key    = google_secret_manager_secret.shopify_api_key.secret_id
+    api_secret = google_secret_manager_secret.shopify_api_secret.secret_id
+    webhook    = google_secret_manager_secret.shopify_webhook_secret.secret_id
+  }
+
+  project  = var.project_id
+  secret_id = each.value
+  role     = "roles/secretmanager.secretAccessor"
+  member   = "serviceAccount:${var.runtime_service_account}"
+}
+
 module "logging" {
   source            = "../../modules/logging"
   project_id        = var.project_id
@@ -218,6 +277,36 @@ module "svc_authz" {
   enable_public_invoker = true
 }
 
+module "svc_shops" {
+  source = "../../modules/cloud_run_service"
+
+  name       = "svc-shops"
+  location   = var.region
+  project_id = var.project_id
+  image      = var.svc_shops_image
+
+  runtime_service_account = var.runtime_service_account
+
+  env_vars = {
+    GCP_PROJECT_ID                          = var.project_id
+    NODE_ENV                                = "production"
+    LOG_LEVEL                               = "info"
+    SHOPIFY_API_KEY_SECRET_NAME             = "shopify/api-key"
+    SHOPIFY_API_SECRET_SECRET_NAME          = "shopify/api-secret"
+    SHOPIFY_WEBHOOK_SECRET_SECRET_NAME      = "shopify/webhook-secret"
+  }
+
+  cpu                   = "1"
+  memory                = "1Gi"
+  min_instances         = 0
+  max_instances         = 10
+  container_concurrency = 80
+  port                  = 8080
+  ingress               = "INGRESS_TRAFFIC_ALL"
+  execution_environment = "EXECUTION_ENVIRONMENT_GEN2"
+  enable_public_invoker = true
+}
+
 # API Gateway Service
 module "svc_api_gateway" {
   source = "../../modules/cloud_run_service"
@@ -235,6 +324,7 @@ module "svc_api_gateway" {
     NODE_ENV              = "production"
     LOG_LEVEL             = "info"
     SVC_AUTHZ_URL         = module.svc_authz.service_url
+    SVC_SHOPS_URL         = module.svc_shops.service_url
     CORS_ALLOWED_ORIGINS  = var.cors_allowed_origins
   }
 
@@ -294,6 +384,11 @@ output "svc_authz_url" {
 output "svc_api_gateway_url" {
   description = "URL of the svc-api-gateway service"
   value       = module.svc_api_gateway.service_url
+}
+
+output "svc_shops_service_url" {
+  description = "URL of the svc-shops service"
+  value       = module.svc_shops.service_url
 }
 
 output "worker_subscriber_url" {

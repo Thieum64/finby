@@ -1,105 +1,148 @@
-import { initOTel } from '@hyperush/lib-otel';
-import fastify from 'fastify';
+import { initOTel, trace, context } from './otel';
+initOTel('svc-shops');
+
+import fastify, { FastifyInstance } from 'fastify';
 import { ulid } from 'ulid';
 import { z } from 'zod';
 
-// Initialize OpenTelemetry first
-initOTel('svc-shops');
+type LogLevel = 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace';
 
-// Environment validation (NOTE: PORT is provided by Cloud Run, never set manually)
 const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  PORT: z.string().transform(Number).default('8080'),
-  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
-  GCP_PROJECT_ID: z.string().optional(),
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('production'),
+  PORT: z.coerce.number().default(8080),
+  LOG_LEVEL: z
+    .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
+    .default('info'),
+  GCP_PROJECT_ID: z.string().min(1, 'GCP_PROJECT_ID is required').default('local-dev'),
+  SHOPIFY_API_KEY_SECRET_NAME: z.string().default('shopify/api-key'),
+  SHOPIFY_API_SECRET_SECRET_NAME: z.string().default('shopify/api-secret'),
+  SHOPIFY_WEBHOOK_SECRET_SECRET_NAME: z.string().default('shopify/webhook-secret'),
 });
 
-const env = envSchema.parse(process.env);
+type ServiceConfig = z.infer<typeof envSchema>;
 
-const server = fastify({
-  logger: {
-    level: env.LOG_LEVEL,
-    transport: env.NODE_ENV === 'development' ? {
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
-        translateTime: 'HH:MM:ss Z',
-        ignore: 'pid,hostname',
+const runtimeConfig = envSchema.parse(process.env);
+
+export function createServer(config: ServiceConfig = runtimeConfig): FastifyInstance {
+  const server = fastify({
+    logger: {
+      level: config.LOG_LEVEL as LogLevel,
+      redact: {
+        paths: [
+          'req.headers.authorization',
+          'req.headers.cookie',
+          'req.headers["set-cookie"]',
+          'res.headers["set-cookie"]',
+        ],
+        censor: '***',
       },
-    } : undefined,
-  },
-});
-
-// Global request ID middleware
-server.addHook('onRequest', async (request, reply) => {
-  const reqId = request.headers['x-request-id'] as string || ulid();
-  request.headers['x-request-id'] = reqId;
-  reply.header('x-request-id', reqId);
-});
-
-// Register plugins function
-const registerPlugins = async () => {
-  // Security middleware
-  await server.register(import('@fastify/helmet'), {
-    global: true,
-  });
-
-  await server.register(import('@fastify/cors'), {
-    origin: env.NODE_ENV === 'development' ? ['http://localhost:3000'] : false,
-  });
-
-  await server.register(import('@fastify/rate-limit'), {
-    max: 100,
-    timeWindow: '1 minute',
-  });
-};
-
-// Health check endpoints
-server.get('/', async (request, _reply) => {
-  const reqId = request.headers['x-request-id'];
-  
-  return {
-    service: 'svc-shops',
-    version: '0.1.0',
-    time: new Date().toISOString(),
-    reqId,
-    env: env.NODE_ENV,
-  };
-});
-
-server.get('/healthz', async (_request, _reply) => {
-  return {
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    checks: {
-      service: 'ok',
+      ...(config.NODE_ENV === 'production'
+        ? {}
+        : {
+            transport: {
+              target: 'pino-pretty',
+              options: { colorize: true },
+            },
+          }),
     },
-  };
-});
-
-// Error handling
-server.setErrorHandler((error, request, reply) => {
-  const reqId = request.headers['x-request-id'];
-  
-  server.log.error({
-    error: error.message,
-    stack: error.stack,
-    reqId,
-  }, 'Unhandled error');
-
-  reply.status(500).send({
-    error: 'Internal Server Error',
-    reqId,
-    timestamp: new Date().toISOString(),
+    genReqId: () => ulid(),
   });
-});
 
-// Graceful shutdown
-const gracefulShutdown = async () => {
-  server.log.info('Shutting down gracefully...');
-  
+  server.addHook('onRequest', async (request, reply) => {
+    const reqId =
+      (request.headers['x-request-id'] as string) || request.id || ulid();
+    request.headers['x-request-id'] = reqId;
+    reply.header('x-request-id', reqId);
+
+    const span = trace.getActiveSpan() ?? trace.getSpan(context.active());
+    if (span) {
+      const { traceId, spanId } = span.spanContext();
+      request.log = request.log.child({ trace_id: traceId, span_id: spanId });
+      reply.header('traceparent', `00-${traceId}-${spanId}-01`);
+    }
+  });
+
+  server.get('/v1/shops/health', async (request) => {
+    return {
+      ok: true,
+      service: 'svc-shops',
+      projectId: config.GCP_PROJECT_ID,
+      requestId: request.headers['x-request-id'],
+      timestamp: new Date().toISOString(),
+    };
+  });
+
+  server.get('/health', async (request) => {
+    const span = trace.getActiveSpan() ?? trace.getSpan(context.active());
+    return {
+      ok: true,
+      service: 'svc-shops',
+      requestId: request.headers['x-request-id'],
+      timestamp: new Date().toISOString(),
+      ...(span && {
+        trace: {
+          traceId: span.spanContext().traceId,
+          spanId: span.spanContext().spanId,
+        },
+      }),
+    };
+  });
+
+  server.setErrorHandler((error, request, reply) => {
+    const reqId = request.headers['x-request-id'];
+    request.log.error(
+      {
+        err: {
+          message: error.message,
+          stack: config.NODE_ENV === 'development' ? error.stack : undefined,
+        },
+        reqId,
+      },
+      'Unhandled error'
+    );
+
+    reply.status(500).send({
+      error: 'Internal Server Error',
+      reqId,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  return server;
+}
+
+const server = createServer(runtimeConfig);
+
+async function start(): Promise<void> {
+  try {
+    await server.listen({ port: runtimeConfig.PORT, host: '0.0.0.0' });
+    server.log.info(
+      {
+        port: runtimeConfig.PORT,
+        env: runtimeConfig.NODE_ENV,
+        projectId: runtimeConfig.GCP_PROJECT_ID,
+        secrets: {
+          apiKey: runtimeConfig.SHOPIFY_API_KEY_SECRET_NAME,
+          apiSecret: runtimeConfig.SHOPIFY_API_SECRET_SECRET_NAME,
+          webhookSecret: runtimeConfig.SHOPIFY_WEBHOOK_SECRET_SECRET_NAME,
+        },
+      },
+      'svc-shops service started'
+    );
+  } catch (error) {
+    server.log.fatal(error, 'Failed to start svc-shops');
+    process.exit(1);
+  }
+}
+
+if (process.env.NODE_ENV !== 'test') {
+  start();
+}
+
+const shutdown = async () => {
   try {
     await server.close();
+    server.log.info('svc-shops service stopped');
     process.exit(0);
   } catch (error) {
     server.log.error(error, 'Error during shutdown');
@@ -107,28 +150,7 @@ const gracefulShutdown = async () => {
   }
 };
 
-process.on('SIGINT', gracefulShutdown);
-process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
 
-// Start server
-const start = async () => {
-  try {
-    // Register all plugins first
-    await registerPlugins();
-    
-    await server.listen({ 
-      port: env.PORT, 
-      host: '0.0.0.0' 
-    });
-    
-    server.log.info({
-      port: env.PORT,
-      env: env.NODE_ENV,
-    }, 'Server started successfully');
-  } catch (error) {
-    server.log.fatal(error, 'Failed to start server');
-    process.exit(1);
-  }
-};
-
-start();
+export { runtimeConfig as envConfig, envSchema };

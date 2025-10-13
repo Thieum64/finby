@@ -9,6 +9,16 @@
 
 This document attests to the complete implementation of Phase 0 infrastructure for the HyperRush project. All required components have been successfully deployed and verified.
 
+## Phase 2.1 — Bootstrap Shopify Connector
+
+- ✅ Nouveau service **svc-shops** (Fastify + Pino + OTel) exposant `GET /v1/shops/health` et `/health` pour Cloud Run.
+- ✅ Package **@hp/lib-shopify** fournissant les helpers `getSecretNameFromEnv` et `getSecretValueLazy` (Secret Manager branché en phase 2.4).
+- ✅ Terraform (env dev) : image `svc_shops_image`, module Cloud Run `svc_shops`, secrets `shopify-api-key`, `shopify-api-secret`, `shopify-webhook-secret` (sans version), IAM Secret Manager pour le runtime.
+- ✅ API Gateway : proxy `/api/v1/shops/**` → svc-shops avec propagation W3C `traceparent`.
+- ✅ CI GitHub Actions `svc-shops-ci.yml` (lint + typecheck + build) déclenchée sur modifications pertinentes.
+- ✅ Output Terraform `svc_shops_service_url` et variable d'environnement `SVC_SHOPS_URL` câblée dans le gateway.
+- 🔜 Post-merge (Claude) : `gcloud builds submit` pour l'image `svc-shops:bootstrap`, `terraform apply`, puis ajouts de versions de secrets.
+
 ## ✅ Component Status
 
 ### 1. OpenTelemetry Observability (svc-authz)

@@ -21,6 +21,10 @@ const envSchema = z.object({
     .string()
     .url('SVC_AUTHZ_URL must be a valid URL')
     .refine((url) => url.length > 0, 'SVC_AUTHZ_URL cannot be empty'),
+  SVC_SHOPS_URL: z
+    .string()
+    .url('SVC_SHOPS_URL must be a valid URL')
+    .refine((url) => url.length > 0, 'SVC_SHOPS_URL cannot be empty'),
   CORS_ALLOWED_ORIGINS: z
     .string()
     .optional()
@@ -207,6 +211,40 @@ server.register(
       },
     });
 
+    server.register(import('@fastify/http-proxy'), {
+      upstream: env.SVC_SHOPS_URL,
+      prefix: '/api/v1/shops',
+      rewritePrefix: '/v1/shops',
+      http2: false,
+      rewriteRequestHeaders: (request, headers) => {
+        const carrier: Record<string, string> = {};
+        propagation.inject(context.active(), carrier);
+
+        const internalHeaders: Record<string, string> = {
+          ...carrier,
+          'x-gateway-source': 'svc-api-gateway',
+          'x-gateway-version': '0.1.0',
+        };
+
+        if (request.user) {
+          internalHeaders['x-user-uid'] = request.user.uid;
+          if (request.user.email) {
+            internalHeaders['x-user-email'] = request.user.email;
+          }
+        }
+
+        const tenantId = headers['x-tenant-id'] as string;
+        if (tenantId && isUlid(tenantId)) {
+          internalHeaders['x-tenant-id'] = tenantId;
+        }
+
+        return {
+          ...headers,
+          ...internalHeaders,
+        };
+      },
+    });
+
     // Route /api/v1/** for future services
     server.get('/api/v1/ping', async () => {
       return { message: 'API Gateway v1 ready for routing' };
@@ -224,6 +262,7 @@ server.register(
         requestId: request.headers['x-request-id'],
         routes: {
           '/api/v1/auth/**': env.SVC_AUTHZ_URL,
+          '/api/v1/shops/**': env.SVC_SHOPS_URL,
           '/api/v1/jobs/**': 'TBD - Cloud Run Jobs',
           '/api/v1/notifications/**': 'TBD - Future service',
         },
