@@ -95,6 +95,7 @@ Thumbs.db
 # Local development
 .env.development
 .env.development.local
+.data/
 
 # Logs
 *.log
