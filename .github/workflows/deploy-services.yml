@@ -1,26 +1,33 @@
 name: Deploy Services Matrix
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
-  workflow_dispatch:
+    paths:
+      - 'infra/**'
+      - 'apps/svc-*/**'
+      - 'packages/**'
+      - '.github/workflows/deploy-services.yml'
 
 permissions:
   contents: read
   id-token: write
 
 concurrency:
-  group: tfstate-core
-  cancel-in-progress: false
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   REGISTRY: europe-west1-docker.pkg.dev
   AR_REPO: services
+  CD_ENABLED: ${{ vars.CD_ENABLED }}
 
 jobs:
   infra-core:
     name: Deploy Core Infrastructure
     runs-on: ubuntu-latest
+    if: ${{ vars.CD_ENABLED == 'true' }}
     outputs:
       terraform-outputs: ${{ steps.tf-outputs.outputs.json }}
 
@@ -86,6 +93,7 @@ jobs:
   deploy:
     name: Deploy Service
     runs-on: ubuntu-latest
+    if: ${{ vars.CD_ENABLED == 'true' }}
     concurrency:
       group: tfstate-service-${{ matrix.service }}
       cancel-in-progress: false
