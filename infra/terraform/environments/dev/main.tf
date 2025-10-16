@@ -291,9 +291,9 @@ module "svc_shops" {
     GCP_PROJECT_ID                          = var.project_id
     NODE_ENV                                = "production"
     LOG_LEVEL                               = "info"
-    SHOPIFY_API_KEY_SECRET_NAME             = "shopify/api-key"
-    SHOPIFY_API_SECRET_SECRET_NAME          = "shopify/api-secret"
-    SHOPIFY_WEBHOOK_SECRET_SECRET_NAME      = "shopify/webhook-secret"
+    SHOPIFY_API_KEY_SECRET_NAME             = "shopify-api-key"
+    SHOPIFY_API_SECRET_SECRET_NAME          = "shopify-api-secret"
+    SHOPIFY_WEBHOOK_SECRET_SECRET_NAME      = "shopify-webhook-secret"
   }
 
   cpu                   = "1"

@@ -6,6 +6,7 @@ describe('svc-shops health endpoint', () => {
     const server = createServer({
       ...envConfig,
       GCP_PROJECT_ID: 'test-project',
+      SHOPIFY_API_KEY_SECRET_NAME: 'custom-api-key',
     });
 
     const response = await server.inject({
@@ -19,6 +20,11 @@ describe('svc-shops health endpoint', () => {
       ok: true,
       service: 'svc-shops',
       projectId: 'test-project',
+      secrets: {
+        apiKey: 'custom-api-key',
+        apiSecret: 'shopify-api-secret',
+        webhook: 'shopify-webhook-secret',
+      },
     });
   });
 });
