@@ -4,6 +4,17 @@ initOTel('svc-shops');
 import fastify, { FastifyInstance } from 'fastify';
 import { ulid } from 'ulid';
 import { z } from 'zod';
+import { getSecretNameFromEnv } from '@hp/lib-shopify';
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    shopifySecrets: {
+      apiKey: string;
+      apiSecret: string;
+      webhook: string;
+    };
+  }
+}
 
 type LogLevel = 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace';
 
@@ -14,9 +25,18 @@ const envSchema = z.object({
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
     .default('info'),
   GCP_PROJECT_ID: z.string().min(1, 'GCP_PROJECT_ID is required').default('local-dev'),
-  SHOPIFY_API_KEY_SECRET_NAME: z.string().default('shopify/api-key'),
-  SHOPIFY_API_SECRET_SECRET_NAME: z.string().default('shopify/api-secret'),
-  SHOPIFY_WEBHOOK_SECRET_SECRET_NAME: z.string().default('shopify/webhook-secret'),
+  SHOPIFY_API_KEY_SECRET_NAME: z
+    .string()
+    .min(1, 'SHOPIFY_API_KEY_SECRET_NAME is required')
+    .default('shopify-api-key'),
+  SHOPIFY_API_SECRET_SECRET_NAME: z
+    .string()
+    .min(1, 'SHOPIFY_API_SECRET_SECRET_NAME is required')
+    .default('shopify-api-secret'),
+  SHOPIFY_WEBHOOK_SECRET_SECRET_NAME: z
+    .string()
+    .min(1, 'SHOPIFY_WEBHOOK_SECRET_SECRET_NAME is required')
+    .default('shopify-webhook-secret'),
 });
 
 type ServiceConfig = z.infer<typeof envSchema>;
@@ -48,6 +68,14 @@ export function createServer(config: ServiceConfig = runtimeConfig): FastifyInst
     genReqId: () => ulid(),
   });
 
+  const resolvedSecretNames = {
+    apiKey: getSecretNameFromEnv('apiKey', config),
+    apiSecret: getSecretNameFromEnv('apiSecret', config),
+    webhook: getSecretNameFromEnv('webhookSecret', config),
+  };
+
+  server.decorate('shopifySecrets', resolvedSecretNames);
+
   server.addHook('onRequest', async (request, reply) => {
     const reqId =
       (request.headers['x-request-id'] as string) || request.id || ulid();
@@ -69,6 +97,7 @@ export function createServer(config: ServiceConfig = runtimeConfig): FastifyInst
       projectId: config.GCP_PROJECT_ID,
       requestId: request.headers['x-request-id'],
       timestamp: new Date().toISOString(),
+      secrets: resolvedSecretNames,
     };
   });
 
@@ -116,16 +145,18 @@ const server = createServer(runtimeConfig);
 async function start(): Promise<void> {
   try {
     await server.listen({ port: runtimeConfig.PORT, host: '0.0.0.0' });
+    const secretNames = server.shopifySecrets ?? {
+      apiKey: runtimeConfig.SHOPIFY_API_KEY_SECRET_NAME,
+      apiSecret: runtimeConfig.SHOPIFY_API_SECRET_SECRET_NAME,
+      webhook: runtimeConfig.SHOPIFY_WEBHOOK_SECRET_SECRET_NAME,
+    };
+
     server.log.info(
       {
         port: runtimeConfig.PORT,
         env: runtimeConfig.NODE_ENV,
         projectId: runtimeConfig.GCP_PROJECT_ID,
-        secrets: {
-          apiKey: runtimeConfig.SHOPIFY_API_KEY_SECRET_NAME,
-          apiSecret: runtimeConfig.SHOPIFY_API_SECRET_SECRET_NAME,
-          webhookSecret: runtimeConfig.SHOPIFY_WEBHOOK_SECRET_SECRET_NAME,
-        },
+        secrets: secretNames,
       },
       'svc-shops service started'
     );

@@ -1,0 +1,65 @@
+openapi: 3.1.0
+info:
+  title: svc-shops bootstrap API
+  version: 0.1.0
+  description: |
+    Minimal Shopify connector surface for Phase 2.1 providing health endpoints
+    to validate routing and observability through the API gateway.
+servers:
+  - url: https://svc-shops-{{ env }}.example.com
+paths:
+  /v1/shops/health:
+    get:
+      summary: Service health probe
+      operationId: getShopsHealth
+      tags:
+        - health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  service:
+                    type: string
+                    example: svc-shops
+                  projectId:
+                    type: string
+                    description: GCP project identifier used by the runtime
+                  requestId:
+                    type: string
+                    description: ULID emitted by the gateway or service
+                  timestamp:
+                    type: string
+                    format: date-time
+                  secrets:
+                    type: object
+                    description: Secret resource names resolved at runtime
+                    properties:
+                      apiKey:
+                        type: string
+                      apiSecret:
+                        type: string
+                      webhook:
+                        type: string
+        '503':
+          description: Service is not ready
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - ok
+                  - error
+                properties:
+                  ok:
+                    type: boolean
+                    const: false
+                  error:
+                    type: string
+                    example: service_unavailable
