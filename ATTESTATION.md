@@ -915,3 +915,106 @@ svc-authz-sa@hyperush-dev-250930115246.iam.gserviceaccount.com:
 - ✅ CI e2e-authz-smoke workflow créé et testé localement
 - ✅ Protected endpoint /me validé → 200 OK avec JWT
 - ✅ Aucun drift résiduel, configuration entièrement dans IaC
+
+---
+
+## Phase 2 Sync - Local Fixes Synchronization
+
+**Date**: 2025-10-20
+**Status**: ✅ COMPLETE
+**Branch**: chore/sync-local-fixes-phase2
+
+### Changes Summary
+
+This PR synchronizes local fixes made during Phase 2 infrastructure deployment to align the versioned codebase with the deployed state.
+
+### 1. lib-shopify: CJS Export Support
+
+**File**: `packages/lib-shopify/package.json`
+
+**Change**: Added CommonJS export support for services using CJS
+
+```json
+"exports": {
+  ".": {
+    "types": "./dist/index.d.ts",
+    "import": "./dist/index.js",
+    "require": "./dist/index.cjs"
+  }
+}
+```
+
+**Rationale**: svc-shops uses CommonJS (`type: "commonjs"` in package-docker.json), requiring a CJS export from lib-shopify. The tsup build already generates both ESM and CJS formats.
+
+### 2. Terraform: Image Tag Update
+
+**File**: `infra/terraform/environments/dev/terraform.tfvars`
+
+**Change**: Updated svc-shops image to `:bootstrap`
+
+```hcl
+svc_shops_image = "europe-west1-docker.pkg.dev/hyperush-dev-250930115246/hp-dev/svc-shops:bootstrap"
+```
+
+**Rationale**: Aligns with the currently deployed image (built via Cloud Build ID: 935841ef-bd65-4621-b9c1-887d490aaedc)
+
+### 3. Terraform: monitoring_lite Module
+
+**Files Added**:
+
+- `infra/terraform/modules/monitoring_lite/main.tf`
+- `infra/terraform/modules/monitoring_lite/variables.tf`
+- `infra/terraform/modules/monitoring_lite/outputs.tf`
+
+**Resources**:
+
+- `google_monitoring_dashboard.lite_dashboard` - Request metrics visualization
+- `google_monitoring_alert_policy.high_5xx_rate` - Alert on 5xx errors
+- `google_monitoring_alert_policy.no_requests_5m` - Alert on service downtime
+
+**Rationale**: Module was created locally during Phase 0 for monitoring svc-authz. Now properly versioned in the repository for reusability.
+
+### Deployment Evidence
+
+**svc-shops Service**:
+
+- Image: `svc-shops:bootstrap` (digest: sha256:13edca4e91eb436436be004d8f4f78a2d0299c9d2f31b652611053c8e3959019)
+- URL: https://svc-shops-2gc7gddpva-ew.a.run.app
+- Health Check: ✅ `/v1/shops/health` returns 200 OK
+- Revision: svc-shops-00002-xxx (deployed 2025-10-20)
+
+**Secrets Configuration**:
+
+- ✅ shopify-api-key (2 versions)
+- ✅ shopify-api-secret (2 versions)
+- ✅ shopify-webhook-secret (2 versions)
+
+### Verification
+
+**Build & Test**:
+
+```bash
+pnpm -w -r build    # ✅ All packages build successfully
+pnpm -w -r test     # ✅ All tests pass
+```
+
+**Terraform Validation**:
+
+```bash
+terraform init      # ✅ Module dependencies resolved
+terraform validate  # ✅ Configuration valid
+terraform plan      # ✅ No drift detected
+```
+
+### Status
+
+**Phase 2 Sync: ✅ COMPLETE**
+
+- ✅ lib-shopify: CJS export added for CommonJS compatibility
+- ✅ terraform.tfvars: svc_shops_image updated to `:bootstrap`
+- ✅ monitoring_lite module: Added to repository (3 resources)
+- ✅ Build & tests: All passing
+- ✅ No secrets exposed in commits
+- ✅ Minimal diffs, documentation updated
+
+**Ready for Phase 2.2**: OAuth flow implementation with Shopify connector
