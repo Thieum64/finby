@@ -1,0 +1,31 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "4f7bf5431a26c148fd5faac77b3d02a4"
+name = "Finby app"
+application_url = "https://svc-api-gateway-2gc7gddpva-ew.a.run.app/api/v1/shops"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+include_config_on_deploy = true
+
+[webhooks]
+api_version = "2026-01"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/uninstalled" ]
+  uri = "/webhooks/app/uninstalled"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/scopes_update" ]
+  uri = "/webhooks/app/scopes_update"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_themes,write_themes"
+
+[auth]
+redirect_urls = [
+  "https://svc-api-gateway-2gc7gddpva-ew.a.run.app/api/v1/shops/callback",
+  "https://example.com/api/auth"  # Keep for local dev with shopify app dev
+]
