@@ -19,6 +19,16 @@ This document attests to the complete implementation of Phase 0 infrastructure f
 - ✅ Output Terraform `svc_shops_service_url` et variable d'environnement `SVC_SHOPS_URL` câblée dans le gateway.
 - 🔜 Post-merge (Claude) : `gcloud builds submit` pour l'image `svc-shops:bootstrap`, `terraform apply`, puis ajouts de versions de secrets.
 
+## Phase 2.2 (backend) — prêt à déployer
+
+- ✅ `GET /v1/shops/install` – redirection Shopify avec `client_id`, `scope`, `redirect_uri`, `state` signé (TTL 10 min).
+- ✅ `GET /v1/shops/callback` – vérification `state`, HMAC hex (timing-safe), échange `code → access_token`, persistance TokenStore (fichier en dev, Secret Manager en prod), réponse `200 {installed:true,shop}`.
+- ✅ `POST /v1/shops/webhooks/shopify` – validation HMAC base64, idempotence simple via fichier `.data/webhooks.json`, réponse 200 / 401.
+- ✅ Pino redact étendu pour masquer `Authorization`, `Set-Cookie`, `X-Shopify-Access-Token`, `X-Shopify-Hmac-Sha256`.
+- ✅ Tests Vitest unitaires & intégration couvrant helpers, state store, TokenStore, webhooks, routes (Fastify.inject).
+- ✅ CI `svc-shops-ci.yml` étendue : env factices, lint/typecheck/build/test + smoke HTTP.
+- ✅ Docs & DX : `.env.example`, README détaillant le flux OAuth/HMAC/TokenStore, script `scripts/dev/shopify-curl-examples.sh`, OpenAPI `packages/contracts/openapi/shops.yaml`.
+
 ## ✅ Component Status
 
 ### 1. OpenTelemetry Observability (svc-authz)
