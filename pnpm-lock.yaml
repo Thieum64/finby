@@ -213,6 +213,9 @@ importers:
       '@google-cloud/opentelemetry-cloud-trace-exporter':
         specifier: ^2.0.0
         version: 2.4.1(@opentelemetry/api@1.9.0)(@opentelemetry/core@1.30.1(@opentelemetry/api@1.9.0))(@opentelemetry/resources@1.30.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@1.19.0(@opentelemetry/api@1.9.0))
+      '@google-cloud/secret-manager':
+        specifier: ^5.6.0
+        version: 5.6.0
       '@opentelemetry/api':
         specifier: ^1.7.0
         version: 1.9.0
@@ -1514,6 +1517,13 @@ packages:
         integrity: sha512-Orxzlfb9c67A15cq2JQEyVc7wEsmFBmHjZWZYQMUyJ1qivXyMwdyNOs9odi79hze+2zqdTtu1E19IM/FtqZ10g==,
       }
     engines: { node: '>=14' }
+
+  '@google-cloud/secret-manager@5.6.0':
+    resolution:
+      {
+        integrity: sha512-0daW/OXQEVc6VQKPyJTQNyD+563I/TYQ7GCQJx4dq3lB666R9FUPvqHx9b/o/qQtZ5pfuoCbGZl3krpxgTSW8Q==,
+      }
+    engines: { node: '>=14.0.0' }
 
   '@google-cloud/storage@7.17.2':
     resolution:
@@ -9014,6 +9024,13 @@ snapshots:
   '@google-cloud/promisify@4.0.0':
     optional: true
 
+  '@google-cloud/secret-manager@5.6.0':
+    dependencies:
+      google-gax: 4.6.1
+    transitivePeerDependencies:
+      - encoding
+      - supports-color
+
   '@google-cloud/storage@7.17.2':
     dependencies:
       '@google-cloud/paginator': 5.0.2
@@ -10363,8 +10380,7 @@ snapshots:
       '@stoplight/yaml-ast-parser': 0.0.50
       tslib: 2.8.1
 
-  '@tootallnate/once@2.0.0':
-    optional: true
+  '@tootallnate/once@2.0.0': {}
 
   '@types/accepts@1.3.7':
     dependencies:
@@ -10381,8 +10397,7 @@ snapshots:
     dependencies:
       '@types/node': 20.19.21
 
-  '@types/caseless@0.12.5':
-    optional: true
+  '@types/caseless@0.12.5': {}
 
   '@types/connect@3.4.36':
     dependencies:
@@ -10499,8 +10514,7 @@ snapshots:
     dependencies:
       '@types/koa': 2.13.9
 
-  '@types/long@4.0.2':
-    optional: true
+  '@types/long@4.0.2': {}
 
   '@types/markdown-escape@1.1.3': {}
 
@@ -10546,7 +10560,6 @@ snapshots:
       '@types/node': 20.19.21
       '@types/tough-cookie': 4.0.5
       form-data: 2.5.5
-    optional: true
 
   '@types/sarif@2.1.7': {}
 
@@ -10573,8 +10586,7 @@ snapshots:
     dependencies:
       '@types/node': 20.19.21
 
-  '@types/tough-cookie@4.0.5':
-    optional: true
+  '@types/tough-cookie@4.0.5': {}
 
   '@types/urijs@1.19.25': {}
 
@@ -10858,7 +10870,6 @@ snapshots:
       debug: 4.4.3(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   agent-base@7.1.4: {}
 
@@ -11004,8 +11015,7 @@ snapshots:
       retry: 0.13.1
     optional: true
 
-  asynckit@0.4.0:
-    optional: true
+  asynckit@0.4.0: {}
 
   atomic-sleep@1.0.0: {}
 
@@ -11176,7 +11186,6 @@ snapshots:
   combined-stream@1.0.8:
     dependencies:
       delayed-stream: 1.0.0
-    optional: true
 
   commander@13.1.0: {}
 
@@ -11286,8 +11295,7 @@ snapshots:
       has-property-descriptors: 1.0.2
       object-keys: 1.1.1
 
-  delayed-stream@1.0.0:
-    optional: true
+  delayed-stream@1.0.0: {}
 
   dependency-graph@0.11.0: {}
 
@@ -11321,7 +11329,6 @@ snapshots:
       inherits: 2.0.4
       readable-stream: 3.6.2
       stream-shift: 1.0.3
-    optional: true
 
   eastasianwidth@0.2.0: {}
 
@@ -11866,7 +11873,6 @@ snapshots:
       hasown: 2.0.2
       mime-types: 2.1.35
       safe-buffer: 5.2.1
-    optional: true
 
   forwarded@0.2.0: {}
 
@@ -12043,7 +12049,6 @@ snapshots:
     transitivePeerDependencies:
       - encoding
       - supports-color
-    optional: true
 
   google-logging-utils@0.0.2: {}
 
@@ -12101,7 +12106,6 @@ snapshots:
       debug: 4.4.3(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   https-proxy-agent@5.0.1:
     dependencies:
@@ -12109,7 +12113,6 @@ snapshots:
       debug: 4.4.3(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
-    optional: true
 
   https-proxy-agent@7.0.6(supports-color@10.2.2):
     dependencies:
@@ -12606,13 +12609,11 @@ snapshots:
       braces: 3.0.3
       picomatch: 2.3.1
 
-  mime-db@1.52.0:
-    optional: true
+  mime-db@1.52.0: {}
 
   mime-types@2.1.35:
     dependencies:
       mime-db: 1.52.0
-    optional: true
 
   mime@3.0.0:
     optional: true
@@ -12703,8 +12704,7 @@ snapshots:
 
   object-assign@4.1.1: {}
 
-  object-hash@3.0.0:
-    optional: true
+  object-hash@3.0.0: {}
 
   object-inspect@1.13.4: {}
 
@@ -13001,7 +13001,6 @@ snapshots:
   proto3-json-serializer@2.0.2:
     dependencies:
       protobufjs: 7.5.4
-    optional: true
 
   protobufjs@7.5.4:
     dependencies:
@@ -13043,7 +13042,6 @@ snapshots:
       inherits: 2.0.4
       string_decoder: 1.3.0
       util-deprecate: 1.0.2
-    optional: true
 
   readable-stream@4.7.0:
     dependencies:
@@ -13126,7 +13124,6 @@ snapshots:
     transitivePeerDependencies:
       - encoding
       - supports-color
-    optional: true
 
   retry@0.13.1:
     optional: true
@@ -13331,10 +13328,8 @@ snapshots:
   stream-events@1.0.5:
     dependencies:
       stubs: 3.0.0
-    optional: true
 
-  stream-shift@1.0.3:
-    optional: true
+  stream-shift@1.0.3: {}
 
   string-argv@0.3.2: {}
 
@@ -13425,8 +13420,7 @@ snapshots:
   strnum@1.1.2:
     optional: true
 
-  stubs@3.0.0:
-    optional: true
+  stubs@3.0.0: {}
 
   sucrase@3.35.0:
     dependencies:
@@ -13456,7 +13450,6 @@ snapshots:
     transitivePeerDependencies:
       - encoding
       - supports-color
-    optional: true
 
   text-extensions@2.4.0: {}
 
@@ -13660,8 +13653,7 @@ snapshots:
 
   urijs@1.19.11: {}
 
-  util-deprecate@1.0.2:
-    optional: true
+  util-deprecate@1.0.2: {}
 
   utility-types@3.11.0: {}
 
