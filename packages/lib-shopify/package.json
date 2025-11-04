@@ -17,7 +17,7 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "test": "vitest"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {},
   "devDependencies": {
