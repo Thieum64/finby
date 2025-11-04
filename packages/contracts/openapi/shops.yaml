@@ -1,0 +1,157 @@
+openapi: 3.1.0
+info:
+  title: Shopify Connector API
+  version: 0.2.0
+  description: Backend endpoints used to install the Finby Shopify app and validate callbacks/webhooks.
+
+servers:
+  - url: https://svc-api-gateway.hyperush.dev
+    description: Production via API Gateway
+  - url: http://localhost:8080
+    description: Local development (Fastify dev server)
+
+tags:
+  - name: shops
+    description: Shopify installation and lifecycle endpoints
+
+paths:
+  /api/v1/shops/install:
+    get:
+      operationId: beginShopifyInstall
+      tags:
+        - shops
+      summary: Redirects merchant to the Shopify OAuth authorize screen
+      parameters:
+        - in: query
+          name: shop
+          description: Shopify shop domain (`{subdomain}.myshopify.com`)
+          required: true
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to Shopify OAuth authorize endpoint
+          headers:
+            Location:
+              description: Shopify authorize URL containing client_id, scope, redirect_uri, and state
+              schema:
+                type: string
+                format: uri
+        '400':
+          description: Invalid or missing shop parameter
+
+  /api/v1/shops/callback:
+    get:
+      operationId: completeShopifyInstall
+      tags:
+        - shops
+      summary: Handles Shopify OAuth callback, verifies HMAC, and persists the access token
+      parameters:
+        - in: query
+          name: shop
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: code
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: state
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: hmac
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Shopify shop installed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstallResponse'
+        '400':
+          description: Missing required parameters
+        '401':
+          description: State or HMAC validation failed
+        '502':
+          description: Shopify token exchange failed
+
+  /api/v1/shops/webhooks/shopify:
+    post:
+      operationId: validateShopifyWebhook
+      tags:
+        - shops
+      summary: Validates Shopify webhook signatures and enforces idempotence
+      parameters:
+        - in: header
+          name: X-Shopify-Hmac-Sha256
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Shopify-Webhook-Id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Shopify-Shop-Domain
+          required: false
+          schema:
+            type: string
+        - in: header
+          name: X-Shopify-Topic
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Webhook accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookResponse'
+        '400':
+          description: Missing webhook headers or body
+        '401':
+          description: Signature validation failed
+
+components:
+  schemas:
+    InstallResponse:
+      type: object
+      required:
+        - installed
+        - shop
+      properties:
+        installed:
+          type: boolean
+          example: true
+        shop:
+          type: string
+          example: demo-shop.myshopify.com
+
+    WebhookResponse:
+      type: object
+      required:
+        - ok
+        - replay
+      properties:
+        ok:
+          type: boolean
+          example: true
+        replay:
+          type: boolean
+          description: Indicates if the webhook had already been processed
+          example: false

@@ -1,29 +1,46 @@
-import { initOTel, trace, context } from './otel';
-initOTel('svc-shops');
-
+import path from 'node:path';
 import fastify, { FastifyInstance } from 'fastify';
 import { ulid } from 'ulid';
-import { z } from 'zod';
+import { initOTel, trace, context } from './otel';
+import { loadConfig, ServiceConfig, envSchema } from './config';
+import { StateStore } from './stores/state-store';
+import {
+  FileTokenStore,
+  SecretManagerTokenStore,
+  TokenStore,
+} from './stores/token-store';
+import { WebhookStore } from './stores/webhook-store';
+import { shopsRoutesPlugin } from './routes/shops';
+
+initOTel('svc-shops');
 
 type LogLevel = 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace';
 
-const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('production'),
-  PORT: z.coerce.number().default(8080),
-  LOG_LEVEL: z
-    .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
-    .default('info'),
-  GCP_PROJECT_ID: z.string().min(1, 'GCP_PROJECT_ID is required').default('local-dev'),
-  SHOPIFY_API_KEY_SECRET_NAME: z.string().default('shopify/api-key'),
-  SHOPIFY_API_SECRET_SECRET_NAME: z.string().default('shopify/api-secret'),
-  SHOPIFY_WEBHOOK_SECRET_SECRET_NAME: z.string().default('shopify/webhook-secret'),
-});
+const runtimeConfig = loadConfig(process.env);
 
-type ServiceConfig = z.infer<typeof envSchema>;
+function createTokenStore(config: ServiceConfig, dataDir: string): TokenStore {
+  if (typeof config.GOOGLE_CLOUD_PROJECT === 'string') {
+    const projectId = config.GOOGLE_CLOUD_PROJECT || config.GCP_PROJECT_ID;
+    return new SecretManagerTokenStore({ projectId });
+  }
 
-const runtimeConfig = envSchema.parse(process.env);
+  return new FileTokenStore({ filePath: path.join(dataDir, 'shops.json') });
+}
 
-export function createServer(config: ServiceConfig = runtimeConfig): FastifyInstance {
+export function createServer(
+  config: ServiceConfig = runtimeConfig
+): FastifyInstance {
+  const dataDir = path.resolve(process.cwd(), config.DATA_DIR);
+  const stateStore = new StateStore({
+    filePath: path.join(dataDir, 'state.json'),
+    ttlMs: config.STATE_TTL_SECONDS * 1000,
+    hmacSecret: config.SHOPIFY_API_SECRET,
+  });
+  const tokenStore = createTokenStore(config, dataDir);
+  const webhookStore = new WebhookStore({
+    filePath: path.join(dataDir, 'webhooks.json'),
+  });
+
   const server = fastify({
     logger: {
       level: config.LOG_LEVEL as LogLevel,
@@ -33,6 +50,8 @@ export function createServer(config: ServiceConfig = runtimeConfig): FastifyInst
           'req.headers.cookie',
           'req.headers["set-cookie"]',
           'res.headers["set-cookie"]',
+          'req.headers["x-shopify-access-token"]',
+          'req.headers["x-shopify-hmac-sha256"]',
         ],
         censor: '***',
       },
@@ -46,6 +65,14 @@ export function createServer(config: ServiceConfig = runtimeConfig): FastifyInst
           }),
     },
     genReqId: () => ulid(),
+  });
+
+  void server.register(shopsRoutesPlugin, {
+    prefix: '/v1/shops',
+    config,
+    stateStore,
+    tokenStore,
+    webhookStore,
   });
 
   server.addHook('onRequest', async (request, reply) => {
@@ -121,11 +148,7 @@ async function start(): Promise<void> {
         port: runtimeConfig.PORT,
         env: runtimeConfig.NODE_ENV,
         projectId: runtimeConfig.GCP_PROJECT_ID,
-        secrets: {
-          apiKey: runtimeConfig.SHOPIFY_API_KEY_SECRET_NAME,
-          apiSecret: runtimeConfig.SHOPIFY_API_SECRET_SECRET_NAME,
-          webhookSecret: runtimeConfig.SHOPIFY_WEBHOOK_SECRET_SECRET_NAME,
-        },
+        scopes: runtimeConfig.SHOPIFY_SCOPES,
       },
       'svc-shops service started'
     );
