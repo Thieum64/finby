@@ -20,7 +20,7 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc -p . --noEmit",
-    "test": "vitest"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "ulid": "^2.3.0"
