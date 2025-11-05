@@ -9,4 +9,5 @@ export default defineConfig({
   sourcemap: true,
   minify: false,
   dts: false,
+  noExternal: ['@hp/lib-shopify'],
 });
