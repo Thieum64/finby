@@ -138,6 +138,9 @@ jobs:
             pnpm --filter=@hyperush/lib-otel build
           fi
 
+      - name: Build workspace libraries
+        run: pnpm -r --filter "./packages/**" build
+
       - name: Build Service
         run: pnpm --filter=@hyperush/${{ matrix.service }} build
 
