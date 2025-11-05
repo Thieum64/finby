@@ -1,8 +1,8 @@
 node_modules
-dist
-package.json
 package-lock.json
 *.log
 .git
 .env
 .env.local
+# keep compiled output for Docker dist-only image
+!dist/**

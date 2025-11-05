@@ -1,26 +1,33 @@
 FROM node:20-alpine AS deps
-WORKDIR /app
-# on évite le workspace: on utilise le package-docker.json dédié
-COPY package-docker.json package.json
-RUN npm install
+WORKDIR /workspace
+ENV NODE_ENV=production
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
-FROM node:20-alpine AS build
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-# build TS -> dist avec tsup
-RUN npx tsup
+RUN corepack enable && corepack prepare pnpm@9 --activate
+
+# Copy workspace manifests and service sources for dependency resolution
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY packages ./packages
+COPY apps/svc-authz ./apps/svc-authz
+
+# Install only production dependencies and create a trimmed runtime output
+RUN pnpm install --prod --frozen-lockfile
+RUN pnpm deploy --filter=@hyperush/svc-authz --prod /tmp/service-runtime
+RUN test -f apps/svc-authz/dist/index.js || (echo 'dist build missing for svc-authz' && false)
 
 FROM node:20-alpine AS runtime
 WORKDIR /app
-# Install curl for healthcheck
-RUN apk add --no-cache curl
-# on réutilise node_modules du stage deps (simple et fiable pour Phase 0)
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=build /app/dist ./dist
 ENV NODE_ENV=production
-ENV PORT=8080
+
+# Run as non-root user for security
+RUN adduser -D service
+USER service
+
+# Copy production dependencies
+COPY --from=deps --chown=service:service /tmp/service-runtime ./
+
+# Copy the pre-built application bundle
+COPY --chown=service:service apps/svc-authz/dist ./dist
+
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD curl -f http://localhost:8080/health || exit 1
-CMD ["node","dist/index.mjs"]
+CMD ["node", "dist/index.js"]

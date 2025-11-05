@@ -6,6 +6,8 @@ infra/
 # Build artifacts and caches
 **/node_modules/
 **/dist/
+!apps/**/dist
+!apps/**/dist/**
 **/build/
 **/coverage/
 **/.next/

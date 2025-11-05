@@ -22,11 +22,8 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/ packages/
 COPY apps/ apps/
 
-# Install all dependencies
-RUN pnpm install --frozen-lockfile
-
-# Build the application
-RUN pnpm --filter=@hyperush/$SERVICE build
+# Install production dependencies only (build happens beforehand in CI)
+RUN pnpm install --prod --frozen-lockfile
 
 # Test that the built binary exists
 RUN test -f apps/$SERVICE/dist/index.js || (echo "Build failed: apps/$SERVICE/dist/index.js not found" && false)

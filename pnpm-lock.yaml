@@ -137,12 +137,6 @@ importers:
       '@google-cloud/opentelemetry-cloud-trace-exporter':
         specifier: ^2.0.0
         version: 2.4.1(@opentelemetry/api@1.9.0)(@opentelemetry/core@1.30.1(@opentelemetry/api@1.9.0))(@opentelemetry/resources@1.30.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@1.19.0(@opentelemetry/api@1.9.0))
-      '@hp/lib-common':
-        specifier: workspace:*
-        version: link:../../packages/lib-common
-      '@hp/lib-firestore':
-        specifier: workspace:*
-        version: link:../../packages/lib-firestore
       '@opentelemetry/api':
         specifier: ^1.7.0
         version: 1.9.0
@@ -180,6 +174,12 @@ importers:
         specifier: ^3.22.4
         version: 3.25.76
     devDependencies:
+      '@hp/lib-common':
+        specifier: workspace:*
+        version: link:../../packages/lib-common
+      '@hp/lib-firestore':
+        specifier: workspace:*
+        version: link:../../packages/lib-firestore
       '@types/node':
         specifier: ^20.10.6
         version: 20.19.21
@@ -216,9 +216,6 @@ importers:
       '@google-cloud/secret-manager':
         specifier: ^5.6.0
         version: 5.6.0
-      '@hp/lib-shopify':
-        specifier: workspace:*
-        version: link:../../packages/lib-shopify
       '@opentelemetry/api':
         specifier: ^1.7.0
         version: 1.9.0
@@ -250,6 +247,9 @@ importers:
         specifier: ^3.23.8
         version: 3.25.76
     devDependencies:
+      '@hp/lib-shopify':
+        specifier: workspace:*
+        version: link:../../packages/lib-shopify
       '@types/node':
         specifier: ^20.11.0
         version: 20.19.21
