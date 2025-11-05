@@ -1,22 +1,32 @@
 FROM node:20-alpine AS deps
-WORKDIR /app
-COPY package-docker.json package.json
-RUN npm install
+WORKDIR /workspace
+ENV NODE_ENV=production
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
-FROM node:20-alpine AS build
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-RUN npx tsup
+RUN corepack enable && corepack prepare pnpm@9 --activate
+
+# Copy workspace manifests and service sources for dependency resolution
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY packages ./packages
+COPY apps/svc-shops ./apps/svc-shops
+
+# Install only production dependencies and create trimmed runtime output
+RUN pnpm install --prod --frozen-lockfile
+RUN pnpm deploy --filter=@hyperush/svc-shops --prod /tmp/service-runtime
+RUN test -f apps/svc-shops/dist/index.js || (echo 'dist build missing for svc-shops' && false)
 
 FROM node:20-alpine AS runtime
 WORKDIR /app
-RUN apk add --no-cache curl
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=build /app/dist ./dist
 ENV NODE_ENV=production
-ENV PORT=8080
+
+RUN adduser -D service
+USER service
+
+# Copy production dependencies
+COPY --from=deps --chown=service:service /tmp/service-runtime ./
+
+# Copy the pre-built bundle
+COPY --chown=service:service apps/svc-shops/dist ./dist
+
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD curl -f http://localhost:8080/health || exit 1
 CMD ["node", "dist/index.js"]

@@ -1,6 +1,7 @@
 node_modules
 npm-debug.log
-dist
 coverage
 .vscode
 .git
+# allow pre-built dist to be copied into runtime image
+!dist/**
