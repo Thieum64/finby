@@ -1,21 +1,22 @@
-.git/
+# Controls what files are sent to Cloud Build by gcloud builds submit
+# Pattern syntax matches .gitignore (negate with !)
+
+# --- Exclude common dev artifacts ---
+.git
+.gitignore
 .github/
-infra/
-**/node_modules/
-**/dist/
-**/build/
-**/coverage/
-**/.next/
-**/.nuxt/
-.vscode/
-.idea/
-*.log
+**/.DS_Store
 **/*.log
-.DS_Store
-Thumbs.db
-.env
+**/tmp
+**/node_modules
+**/coverage
+**/.pnpm-store
+**/.turbo
+**/.cache
+
+# --- Ensure compiled bundles and manifests for services are kept ---
+!apps/**/dist/**
+!apps/**/package.json
 !package.json
 !pnpm-lock.yaml
 !pnpm-workspace.yaml
-!apps/
-!packages/
