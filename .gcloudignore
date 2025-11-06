@@ -14,7 +14,7 @@
 **/.turbo
 **/.cache
 
-# --- Ensure compiled bundles and manifests for services are kept ---
+# --- Ensure compiled bundles and manifests for services are kept (critical for Cloud Build) ---
 !apps/**/dist/**
 !apps/**/package.json
 !package.json
