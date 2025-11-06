@@ -171,7 +171,7 @@ jobs:
           cat > /tmp/cloudbuild.yaml << 'EOF'
           steps:
           - name: 'gcr.io/cloud-builders/docker'
-            args: ['build', '-f', 'packages/docker/node-pnpm.Dockerfile', '--build-arg', 'SERVICE=${_SERVICE}', '-t', '${_IMAGE_SHA}', '-t', '${_IMAGE_LATEST}', '.']
+            args: ['build', '-f', 'packages/docker/node-pnpm.Dockerfile', '--build-arg', 'SERVICE=apps/${_SERVICE}', '-t', '${_IMAGE_SHA}', '-t', '${_IMAGE_LATEST}', '.']
           images:
           - '${_IMAGE_SHA}'
           - '${_IMAGE_LATEST}'
