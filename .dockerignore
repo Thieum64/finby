@@ -28,3 +28,4 @@ Thumbs.db
 !pnpm-lock.yaml
 !pnpm-workspace.yaml
 !apps/**/package.json
+!apps/**/dist/**
