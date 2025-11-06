@@ -16,6 +16,7 @@ concurrency:
 env:
   REGISTRY: europe-west1-docker.pkg.dev
   AR_REPO: services
+  REGION: ${{ vars.GCP_REGION || 'europe-west1' }}
 
 jobs:
   infra-core:
@@ -125,6 +126,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build shared libraries
+        run: pnpm -r --filter "./packages/**" build
+
       - name: Lint and Test
         run: |
           echo "🧹 Running lint..."
@@ -143,6 +147,13 @@ jobs:
 
       - name: Build Service
         run: pnpm --filter=@hyperush/${{ matrix.service }} build
+
+      - name: Preflight local docker build (no push)
+        run: |
+          docker build \
+            -f packages/docker/node-pnpm.Dockerfile \
+            --build-arg SERVICE=apps/${{ matrix.service }} \
+            -t preflight:${{ matrix.service }} .
 
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
@@ -177,20 +188,24 @@ jobs:
           - '${_IMAGE_LATEST}'
           EOF
 
+          # Reset BUILD_ID env so subsequent steps don't reuse an old value
+          echo "BUILD_ID=" >> $GITHUB_ENV
+
           # Submit build from workspace root with explicit config
           echo "📋 Building from $GITHUB_WORKSPACE with Cloud Build..."
           BUILD_ID=$(gcloud builds submit "$GITHUB_WORKSPACE" \
             --project "${{ vars.GCP_PROJECT_ID }}" \
-            --region "${{ vars.GCP_REGION }}" \
+            --region "$REGION" \
             --config /tmp/cloudbuild.yaml \
             --substitutions _SERVICE=${{ matrix.service }},_IMAGE_SHA=$IMAGE_URI,_IMAGE_LATEST=$IMAGE_URI_LATEST \
             --async --format="value(id)")
 
           echo "⏳ Build ID: $BUILD_ID - Waiting for completion..."
+          echo "BUILD_ID=$BUILD_ID" >> $GITHUB_ENV
 
           # Wait for build completion
           while true; do
-            STATUS=$(gcloud builds describe "$BUILD_ID" --region="${{ vars.GCP_REGION }}" --format="value(status)")
+            STATUS=$(gcloud builds describe "$BUILD_ID" --region="$REGION" --format="value(status)")
             echo "Build status: $STATUS"
 
             if [ "$STATUS" = "SUCCESS" ]; then
@@ -206,9 +221,9 @@ jobs:
           done
 
           # Get actual digest from Cloud Build results
-          DIGEST=$(gcloud builds describe "$BUILD_ID" --region="${{ vars.GCP_REGION }}" --format="value(results.images[0].digest)")
+          DIGEST=$(gcloud builds describe "$BUILD_ID" --region="$REGION" --format="value(results.images[0].digest)")
           if [ -z "$DIGEST" ]; then
-            DIGEST=$(gcloud builds describe "$BUILD_ID" --region="${{ vars.GCP_REGION }}" --format="value(results.images[1].digest)")
+            DIGEST=$(gcloud builds describe "$BUILD_ID" --region="$REGION" --format="value(results.images[1].digest)")
           fi
           if [ -z "$DIGEST" ]; then
             echo "❌ Failed to get digest from build results"
@@ -230,6 +245,31 @@ jobs:
           echo "IMAGE_URI_LATEST=$IMAGE_URI_LATEST" >> $GITHUB_ENV
           echo "IMAGE_URI_DIGEST=$IMAGE_URI_DIGEST" >> $GITHUB_ENV
           echo "IMAGE_DIGEST=$DIGEST" >> $GITHUB_ENV
+
+      - name: Dump Cloud Build details
+        if: always()
+        env:
+          BUILD_ID: ${{ env.BUILD_ID }}
+        run: |
+          if [ -z "$BUILD_ID" ]; then
+            echo "No BUILD_ID captured."
+            exit 0
+          fi
+          echo "Build ID: $BUILD_ID"
+          gcloud builds describe "$BUILD_ID" --region "$REGION" --format='value(status,statusDetail,logUrl)'
+          echo "----- tail of Cloud Build logs -----"
+          gcloud builds log "$BUILD_ID" --region "$REGION" | tail -n 300 || true
+
+      - name: Scan Cloud Build logs for path errors
+        if: always()
+        env:
+          BUILD_ID: ${{ env.BUILD_ID }}
+        run: |
+          if [ -z "$BUILD_ID" ]; then
+            echo "No BUILD_ID captured."
+            exit 0
+          fi
+          gcloud builds log "$BUILD_ID" --region "$REGION" | rg -n " (ENOENT|No such file|file not found|COPY|ADD|permissions?) " || true
 
       - name: Setup Terraform for Service
         uses: hashicorp/setup-terraform@v3
