@@ -12,6 +12,7 @@ RUN corepack enable && corepack prepare pnpm@9 --activate
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY packages ./packages
 COPY ${SERVICE} ${SERVICE}
+RUN test -f ${SERVICE}/package.json || (echo "Missing ${SERVICE}/package.json. Check .gcloudignore/.dockerignore" && ls -la ${SERVICE} && exit 1)
 
 RUN pnpm install --prod --frozen-lockfile
 
@@ -24,7 +25,7 @@ RUN adduser -D service && chown service:service /app
 USER service
 
 COPY --from=deps --chown=service:service /workspace/node_modules ./node_modules
-COPY --from=deps --chown=service:service /workspace/${SERVICE}/package.json ./package.json
+COPY --chown=service:service ${SERVICE}/package.json ./package.json
 COPY --chown=service:service ${SERVICE}/dist ./dist
 
 EXPOSE 8080
