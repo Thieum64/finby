@@ -1,0 +1,38 @@
+{
+  "name": "@hyperush/lib-otel",
+  "version": "0.1.0",
+  "type": "module",
+  "sideEffects": false,
+  "description": "Shared OpenTelemetry helpers for Hyperush services",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@google-cloud/opentelemetry-cloud-trace-exporter": "^2.0.0",
+    "@opentelemetry/api": "^1.7.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.40.3",
+    "@opentelemetry/resources": "^1.18.1",
+    "@opentelemetry/sdk-node": "^0.45.1",
+    "@opentelemetry/semantic-conventions": "^1.18.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.6",
+    "tsup": "^8.0.1",
+    "typescript": "^5.4.0",
+    "vitest": "^1.5.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
