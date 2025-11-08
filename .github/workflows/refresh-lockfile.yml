@@ -1,0 +1,55 @@
+name: Refresh Lockfile
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9.15.9
+
+      - name: Show pnpm version
+        run: pnpm -v
+
+      - name: Install workspace dependencies
+        run: pnpm -w install
+
+      - name: Build shared packages (best effort)
+        run: pnpm -r --filter "./packages/**" build || true
+
+      - name: Commit refreshed lockfile
+        env:
+          BRANCH_NAME: ci/refresh-lockfile-auto
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git show-ref --verify --quiet refs/heads/$BRANCH_NAME; then
+            git branch -D $BRANCH_NAME
+          fi
+          git checkout -b $BRANCH_NAME
+          if git diff --quiet pnpm-lock.yaml; then
+            echo "pnpm-lock.yaml already up to date"
+            exit 0
+          fi
+          git add pnpm-lock.yaml
+          git commit -m "chore(lockfile): refresh pnpm lock"
+          git push -f origin $BRANCH_NAME

@@ -20,3 +20,10 @@
 !package.json
 !pnpm-lock.yaml
 !pnpm-workspace.yaml
+
+!apps//package.json
+!apps//dist/**
+!packages/**/package.json
+!pnpm-workspace.yaml
+!pnpm-lock.yaml
+!package.json

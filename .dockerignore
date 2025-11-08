@@ -29,3 +29,10 @@ Thumbs.db
 !pnpm-workspace.yaml
 !apps/**/package.json
 !apps/**/dist/**
+
+!apps//package.json
+!apps//dist/**
+!packages/**/package.json
+!pnpm-workspace.yaml
+!pnpm-lock.yaml
+!package.json
