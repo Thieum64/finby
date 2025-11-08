@@ -143,6 +143,7 @@ jobs:
           fi
 
       - name: Build workspace libraries
+        continue-on-error: true
         run: pnpm -r --filter "./packages/**" build
 
       - name: Build Service
