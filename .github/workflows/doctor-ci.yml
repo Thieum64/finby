@@ -1,0 +1,190 @@
+name: Doctor CI - Auto-repair IAM & Cloud Run
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'  # Daily at midnight
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  REGION: ${{ vars.GCP_REGION || 'europe-west1' }}
+
+jobs:
+  doctor:
+    name: Auto-repair GCP IAM and Cloud Run
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+          access_token_scopes: https://www.googleapis.com/auth/cloud-platform
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Enable required GCP APIs
+        run: |
+          echo "## 🔧 Enabling Required APIs" >> $GITHUB_STEP_SUMMARY
+
+          APIS=(
+            "run.googleapis.com"
+            "cloudbuild.googleapis.com"
+            "artifactregistry.googleapis.com"
+            "iam.googleapis.com"
+          )
+
+          for api in "${APIS[@]}"; do
+            echo "Enabling $api..."
+            gcloud services enable "$api" --project="${{ vars.GCP_PROJECT_ID }}" || echo "⚠️ Failed to enable $api (may already be enabled)"
+          done
+
+          echo "✅ All required APIs enabled" >> $GITHUB_STEP_SUMMARY
+
+      - name: Configure IAM Permissions
+        run: |
+          echo "## 🔐 Configuring IAM Permissions" >> $GITHUB_STEP_SUMMARY
+
+          PROJECT_ID="${{ vars.GCP_PROJECT_ID }}"
+          PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
+
+          DEPLOYER_SA="${{ secrets.GCP_SERVICE_ACCOUNT }}"
+          RUNTIME_SA="runtime-sa@${PROJECT_ID}.iam.gserviceaccount.com"
+          CLOUD_BUILD_SA="${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com"
+          SERVERLESS_SA="service-${PROJECT_NUMBER}@serverless-robot-prod.iam.gserviceaccount.com"
+
+          echo "| Principal | Role | Resource |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|------|----------|" >> $GITHUB_STEP_SUMMARY
+
+          # Ensure runtime SA exists
+          if ! gcloud iam service-accounts describe "$RUNTIME_SA" --project="$PROJECT_ID" 2>/dev/null; then
+            echo "Creating runtime service account: $RUNTIME_SA"
+            gcloud iam service-accounts create runtime-sa \
+              --display-name="Runtime SA for Cloud Run services" \
+              --project="$PROJECT_ID"
+            echo "| $RUNTIME_SA | - | Created ✅ |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Runtime SA already exists: $RUNTIME_SA"
+            echo "| $RUNTIME_SA | - | Exists ✅ |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Grant deployer SA permissions to manage Cloud Run
+          echo "Granting roles/run.admin to deployer SA..."
+          gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+            --member="serviceAccount:${DEPLOYER_SA}" \
+            --role="roles/run.admin" \
+            --condition=None || echo "⚠️ Failed to grant run.admin"
+          echo "| $DEPLOYER_SA | run.admin | Project |" >> $GITHUB_STEP_SUMMARY
+
+          # Grant deployer SA permission to act as runtime SA
+          echo "Granting iam.serviceAccountUser to deployer SA on runtime SA..."
+          gcloud iam service-accounts add-iam-policy-binding "$RUNTIME_SA" \
+            --member="serviceAccount:${DEPLOYER_SA}" \
+            --role="roles/iam.serviceAccountUser" \
+            --condition=None || echo "⚠️ Failed to grant serviceAccountUser"
+          echo "| $DEPLOYER_SA | iam.serviceAccountUser | $RUNTIME_SA |" >> $GITHUB_STEP_SUMMARY
+
+          # Grant serverless robot SA permission to act as runtime SA
+          echo "Granting iam.serviceAccountUser to serverless robot SA on runtime SA..."
+          gcloud iam service-accounts add-iam-policy-binding "$RUNTIME_SA" \
+            --member="serviceAccount:${SERVERLESS_SA}" \
+            --role="roles/iam.serviceAccountUser" \
+            --condition=None || echo "⚠️ Failed to grant serviceAccountUser to serverless SA"
+          echo "| $SERVERLESS_SA | iam.serviceAccountUser | $RUNTIME_SA |" >> $GITHUB_STEP_SUMMARY
+
+          # Grant Cloud Build SA permission to push to Artifact Registry
+          echo "Granting artifactregistry.writer to Cloud Build SA..."
+          gcloud artifacts repositories add-iam-policy-binding services \
+            --location="${{ env.REGION }}" \
+            --member="serviceAccount:${CLOUD_BUILD_SA}" \
+            --role="roles/artifactregistry.writer" \
+            --project="$PROJECT_ID" || echo "⚠️ Failed to grant artifactregistry.writer"
+          echo "| $CLOUD_BUILD_SA | artifactregistry.writer | services repo |" >> $GITHUB_STEP_SUMMARY
+
+          # Grant runtime SA basic Cloud Run permissions
+          echo "Granting basic permissions to runtime SA..."
+          for role in "roles/logging.logWriter" "roles/cloudtrace.agent" "roles/monitoring.metricWriter"; do
+            gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+              --member="serviceAccount:${RUNTIME_SA}" \
+              --role="$role" \
+              --condition=None || echo "⚠️ Failed to grant $role to runtime SA"
+            echo "| $RUNTIME_SA | $role | Project |" >> $GITHUB_STEP_SUMMARY
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ All IAM permissions configured" >> $GITHUB_STEP_SUMMARY
+
+      - name: Clean up conflicting Cloud Run services (DEV only)
+        if: vars.GCP_PROJECT_ID == 'hyperush-dev-250930115246'
+        run: |
+          echo "## 🧹 Cleaning up Cloud Run services (DEV environment)" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          SERVICES=(
+            "svc-authz"
+            "svc-shops"
+            "svc-requests"
+            "svc-preview"
+            "svc-ia-diff"
+            "svc-quality"
+            "svc-billing"
+            "svc-notify"
+            "svc-admin"
+            "api-gateway"
+          )
+
+          for service in "${SERVICES[@]}"; do
+            if gcloud run services describe "$service" --region="${{ env.REGION }}" --project="${{ vars.GCP_PROJECT_ID }}" 2>/dev/null; then
+              echo "Deleting existing service: $service"
+              gcloud run services delete "$service" \
+                --region="${{ env.REGION }}" \
+                --project="${{ vars.GCP_PROJECT_ID }}" \
+                --quiet || echo "⚠️ Failed to delete $service"
+              echo "| $service | Deleted 🗑️ |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "Service $service does not exist, skipping"
+              echo "| $service | Not found ⏭️ |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Cloud Run cleanup completed" >> $GITHUB_STEP_SUMMARY
+
+      - name: Verify Configuration
+        run: |
+          echo "## ✅ Verification Summary" >> $GITHUB_STEP_SUMMARY
+
+          PROJECT_ID="${{ vars.GCP_PROJECT_ID }}"
+          RUNTIME_SA="runtime-sa@${PROJECT_ID}.iam.gserviceaccount.com"
+
+          # Check runtime SA exists
+          if gcloud iam service-accounts describe "$RUNTIME_SA" --project="$PROJECT_ID" 2>/dev/null; then
+            echo "- ✅ Runtime SA exists: $RUNTIME_SA" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ❌ Runtime SA missing: $RUNTIME_SA" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Check Artifact Registry repo exists
+          if gcloud artifacts repositories describe services \
+              --location="${{ env.REGION }}" \
+              --project="$PROJECT_ID" 2>/dev/null; then
+            echo "- ✅ Artifact Registry repo exists: services" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ⚠️ Artifact Registry repo not found (may need manual creation)" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🎉 Doctor CI completed successfully!" >> $GITHUB_STEP_SUMMARY
