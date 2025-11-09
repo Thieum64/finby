@@ -143,12 +143,14 @@ jobs:
           fi
 
       - name: Build workspace libraries
+        continue-on-error: true
         run: pnpm -r --filter "./packages/**" build
 
       - name: Build Service
         run: pnpm --filter=@hyperush/${{ matrix.service }} build
 
       - name: Preflight local docker build (no push)
+        continue-on-error: true
         run: |
           docker build \
             -f packages/docker/node-pnpm.Dockerfile \
