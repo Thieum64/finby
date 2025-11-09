@@ -115,6 +115,10 @@ export function createServer(
     };
   });
 
+  server.get('/healthz', async (_request, _reply) => {
+    return 'ok';
+  });
+
   server.setErrorHandler((error, request, reply) => {
     const reqId = request.headers['x-request-id'];
     request.log.error(
