@@ -135,7 +135,7 @@ jobs:
           echo "🧹 Running lint..."
           pnpm -r lint || echo "⚠️ Lint warnings allowed"
           echo "🧪 Running tests..."
-          CI=1 pnpm -r test run
+          CI=1 pnpm -r run test
 
       - name: Build lib-otel if needed
         run: |
