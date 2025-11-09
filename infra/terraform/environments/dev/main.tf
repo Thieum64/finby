@@ -248,96 +248,10 @@ resource "google_pubsub_subscription" "jobs_push_sub" {
 }
 
 # Cloud Run Services
-module "svc_authz" {
-  source = "../../modules/cloud_run_service"
-
-  name       = "svc-authz"
-  location   = var.region
-  project_id = var.project_id
-  image      = var.svc_authz_image
-
-  runtime_service_account = data.google_service_account.svc_authz_sa.email
-
-  env_vars = {
-    GCP_PROJECT_ID       = var.project_id
-    FIREBASE_PROJECT_ID  = var.firebase_project_id
-    NODE_ENV             = "production"
-    LOG_LEVEL            = "info"
-    ENFORCE_INVITE_EMAIL = "true"
-  }
-
-  cpu                   = "1"
-  memory                = "1Gi"
-  min_instances         = 0
-  max_instances         = 10
-  container_concurrency = 80
-  port                  = 8080
-  ingress               = "INGRESS_TRAFFIC_ALL"
-  execution_environment = "EXECUTION_ENVIRONMENT_GEN2"
-  enable_public_invoker = true
-}
-
-module "svc_shops" {
-  source = "../../modules/cloud_run_service"
-
-  name       = "svc-shops"
-  location   = var.region
-  project_id = var.project_id
-  image      = var.svc_shops_image
-
-  runtime_service_account = var.runtime_service_account
-
-  env_vars = {
-    GCP_PROJECT_ID                          = var.project_id
-    NODE_ENV                                = "production"
-    LOG_LEVEL                               = "info"
-    SHOPIFY_API_KEY_SECRET_NAME             = "shopify/api-key"
-    SHOPIFY_API_SECRET_SECRET_NAME          = "shopify/api-secret"
-    SHOPIFY_WEBHOOK_SECRET_SECRET_NAME      = "shopify/webhook-secret"
-  }
-
-  cpu                   = "1"
-  memory                = "1Gi"
-  min_instances         = 0
-  max_instances         = 10
-  container_concurrency = 80
-  port                  = 8080
-  ingress               = "INGRESS_TRAFFIC_ALL"
-  execution_environment = "EXECUTION_ENVIRONMENT_GEN2"
-  enable_public_invoker = true
-}
-
-# API Gateway Service
-module "svc_api_gateway" {
-  source = "../../modules/cloud_run_service"
-
-  name       = "svc-api-gateway"
-  location   = var.region
-  project_id = var.project_id
-  image      = var.svc_api_gateway_image
-
-  runtime_service_account = data.google_service_account.svc_api_gateway_sa.email
-
-  env_vars = {
-    GCP_PROJECT_ID        = var.project_id
-    FIREBASE_PROJECT_ID   = var.project_id
-    NODE_ENV              = "production"
-    LOG_LEVEL             = "info"
-    SVC_AUTHZ_URL         = module.svc_authz.service_url
-    SVC_SHOPS_URL         = module.svc_shops.service_url
-    CORS_ALLOWED_ORIGINS  = var.cors_allowed_origins
-  }
-
-  cpu                   = "1"
-  memory                = "1Gi"
-  min_instances         = 0
-  max_instances         = 10
-  container_concurrency = 80
-  port                  = 8080
-  ingress               = "INGRESS_TRAFFIC_ALL"
-  execution_environment = "EXECUTION_ENVIRONMENT_GEN2"
-  enable_public_invoker = true
-}
+# NOTE: Individual services (svc-authz, svc-shops, api-gateway) are managed by their
+# own Terraform modules in infra/terraform/services/<service>/ to avoid circular
+# dependencies and enable independent deployment via the deploy-services.yml workflow.
+# Only shared infrastructure (worker-subscriber) remains in core.
 
 # Infrastructure outputs
 output "pubsub_topics" {
@@ -376,20 +290,7 @@ output "project_info" {
   }
 }
 
-output "svc_authz_url" {
-  description = "URL of the svc-authz service"
-  value       = module.svc_authz.service_url
-}
-
-output "svc_api_gateway_url" {
-  description = "URL of the svc-api-gateway service"
-  value       = module.svc_api_gateway.service_url
-}
-
-output "svc_shops_service_url" {
-  description = "URL of the svc-shops service"
-  value       = module.svc_shops.service_url
-}
+# Service URLs are output by individual service modules in infra/terraform/services/<service>/outputs.tf
 
 output "worker_subscriber_url" {
   description = "URL of the worker subscriber service"
