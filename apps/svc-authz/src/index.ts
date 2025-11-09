@@ -144,6 +144,10 @@ server.get('/health', async (request, _reply) => {
   return result;
 });
 
+server.get('/healthz', async (_request, _reply) => {
+  return 'ok';
+});
+
 // v1 API namespace (future endpoints)
 server.register(
   async function v1Routes(server) {
