@@ -41,7 +41,12 @@ COPY packages ./packages
 COPY ${SERVICE}/package.json ${SERVICE}/package.json
 
 # Copy built artifacts from builder
-COPY --from=builder /workspace/packages/*/dist ./packages/*/dist
+# Copy each package's dist directory individually (wildcards don't work with multiple sources)
+COPY --from=builder /workspace/packages/lib-common/dist ./packages/lib-common/dist
+COPY --from=builder /workspace/packages/lib-firestore/dist ./packages/lib-firestore/dist
+COPY --from=builder /workspace/packages/lib-otel/dist ./packages/lib-otel/dist
+COPY --from=builder /workspace/packages/lib-shopify/dist ./packages/lib-shopify/dist
+COPY --from=builder /workspace/packages/sdk-authz/dist ./packages/sdk-authz/dist
 COPY --from=builder /workspace/${SERVICE}/dist ${SERVICE}/dist
 
 # Use pnpm deploy to create a standalone deployment
