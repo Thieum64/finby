@@ -202,6 +202,11 @@ module "worker_subscriber" {
   ingress               = "INGRESS_TRAFFIC_INTERNAL_ONLY" # Only Pub/Sub can access
   execution_environment = "EXECUTION_ENVIRONMENT_GEN2"
   enable_public_invoker = false # No public access
+
+  # Override health check path for worker-subscriber
+  probe_path = "/health"
+  # enable_startup_probe = false  # Uncomment if /health probe still fails
+  # enable_liveness_probe = false # Uncomment if needed
 }
 
 # Create a Pub/Sub push-compatible service account

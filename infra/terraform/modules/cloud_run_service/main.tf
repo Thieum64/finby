@@ -86,6 +86,24 @@ variable "enable_public_invoker" {
   default     = null
 }
 
+variable "probe_path" {
+  description = "Health check probe path"
+  type        = string
+  default     = "/healthz"
+}
+
+variable "enable_startup_probe" {
+  description = "Enable startup probe"
+  type        = bool
+  default     = true
+}
+
+variable "enable_liveness_probe" {
+  description = "Enable liveness probe"
+  type        = bool
+  default     = true
+}
+
 # Cloud Run Service
 resource "google_cloud_run_v2_service" "service" {
   name     = var.name
@@ -134,22 +152,30 @@ resource "google_cloud_run_v2_service" "service" {
         container_port = var.port != null ? var.port : 8080
       }
 
-      startup_probe {
-        http_get {
-          path = "/healthz"
+      dynamic "startup_probe" {
+        for_each = var.enable_startup_probe ? [1] : []
+        content {
+          http_get {
+            path = var.probe_path
+            port = "http1"
+          }
+          period_seconds    = 2
+          timeout_seconds   = 2
+          failure_threshold = 60
         }
-        period_seconds    = 2
-        timeout_seconds   = 2
-        failure_threshold = 60
       }
 
-      liveness_probe {
-        http_get {
-          path = "/healthz"
+      dynamic "liveness_probe" {
+        for_each = var.enable_liveness_probe ? [1] : []
+        content {
+          http_get {
+            path = var.probe_path
+            port = "http1"
+          }
+          period_seconds    = 5
+          timeout_seconds   = 2
+          failure_threshold = 3
         }
-        period_seconds    = 5
-        timeout_seconds   = 2
-        failure_threshold = 3
       }
     }
   }
