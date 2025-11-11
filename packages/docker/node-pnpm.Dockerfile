@@ -9,11 +9,10 @@ WORKDIR /workspace
 
 RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 
-# Copy workspace files
+# Copy workspace files maintaining original structure
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY packages ./packages
-COPY ${SERVICE} ./apps/service
-COPY apps ./apps
+COPY ${SERVICE} ${SERVICE}
 
 # Install all dependencies (including dev dependencies for build)
 RUN pnpm install --frozen-lockfile
@@ -25,7 +24,7 @@ RUN pnpm -r --filter "./packages/**" build || true
 RUN pnpm --filter @hyperush/$(basename ${SERVICE}) build
 
 # Verify dist exists
-RUN test -f apps/service/dist/index.js || (echo "ERROR: apps/service/dist/index.js not found after build" && ls -la apps/service/ && exit 1)
+RUN test -f ${SERVICE}/dist/index.js || (echo "ERROR: ${SERVICE}/dist/index.js not found after build" && ls -la ${SERVICE}/ && exit 1)
 
 # Deploy stage - create standalone deployment with all dependencies
 FROM node:20-alpine AS deploy
@@ -36,15 +35,14 @@ WORKDIR /workspace
 
 RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 
-# Copy workspace files
+# Copy workspace files maintaining original structure for pnpm deploy
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY packages ./packages
-COPY ${SERVICE} ./apps/service
-COPY apps ./apps
+COPY ${SERVICE}/package.json ${SERVICE}/package.json
 
 # Copy built artifacts from builder
 COPY --from=builder /workspace/packages/*/dist ./packages/*/dist
-COPY --from=builder /workspace/apps/service/dist ./apps/service/dist
+COPY --from=builder /workspace/${SERVICE}/dist ${SERVICE}/dist
 
 # Use pnpm deploy to create a standalone deployment
 # This resolves all workspace dependencies into node_modules
