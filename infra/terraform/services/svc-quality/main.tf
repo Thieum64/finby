@@ -44,6 +44,9 @@ module "service" {
 
   enable_public_invoker = true
 
+  # Temporarily disable startup probe to allow service to start
+  enable_startup_probe = false
+
   env_vars = merge(
     {
       NODE_ENV       = "development"
