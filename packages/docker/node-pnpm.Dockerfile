@@ -19,10 +19,10 @@ RUN pnpm install --frozen-lockfile
 
 # Build packages first (lib-otel and others)
 # Build each package individually to avoid one failure stopping the rest
-RUN pnpm --filter "@hyperush/lib-common" build || true
-RUN pnpm --filter "@hyperush/lib-firestore" build || true
-RUN pnpm --filter "@hyperush/lib-shopify" build || true
-RUN pnpm --filter "@hyperush/sdk-authz" build || true
+RUN pnpm --filter "@hp/lib-common" build || true
+RUN pnpm --filter "@hp/lib-firestore" build || true
+RUN pnpm --filter "@hp/lib-shopify" build || true
+RUN pnpm --filter "@hp/sdk-authz" build || true
 # lib-otel has TypeScript DTS generation issues but the JS/CJS/ESM builds work
 # We allow it to fail as the runtime code is generated successfully
 RUN pnpm --filter "@hyperush/lib-otel" build || true
