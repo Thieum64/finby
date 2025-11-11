@@ -1,0 +1,138 @@
+name: Debug Service Logs
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'Service name to debug (e.g., svc-authz, api-gateway)'
+        required: true
+        type: choice
+        options:
+          - svc-authz
+          - svc-shops
+          - svc-requests
+          - svc-preview
+          - svc-ia-diff
+          - svc-quality
+          - svc-billing
+          - svc-notify
+          - svc-admin
+          - api-gateway
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  REGION: ${{ vars.GCP_REGION || 'europe-west1' }}
+  PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+
+jobs:
+  debug:
+    name: Debug ${{ inputs.service }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+          access_token_scopes: https://www.googleapis.com/auth/cloud-platform
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Get Service Status and Logs
+        run: |
+          echo "## 🔍 Debug Report for ${{ inputs.service }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Get service description
+          echo "### Service Description" >> $GITHUB_STEP_SUMMARY
+          gcloud run services describe ${{ inputs.service }} \
+            --project="${{ env.PROJECT_ID }}" \
+            --region="${{ env.REGION }}" \
+            --format="yaml(status.url,status.latestReadyRevisionName,status.latestCreatedRevisionName,status.conditions)" \
+            2>&1 | tee /tmp/service_desc.txt || echo "Service not found"
+
+          # Extract key info
+          SERVICE_URL=$(gcloud run services describe ${{ inputs.service }} \
+            --project="${{ env.PROJECT_ID }}" \
+            --region="${{ env.REGION }}" \
+            --format="value(status.url)" 2>/dev/null || echo "N/A")
+
+          READY_REV=$(gcloud run services describe ${{ inputs.service }} \
+            --project="${{ env.PROJECT_ID }}" \
+            --region="${{ env.REGION }}" \
+            --format="value(status.latestReadyRevisionName)" 2>/dev/null || echo "N/A")
+
+          CREATED_REV=$(gcloud run services describe ${{ inputs.service }} \
+            --project="${{ env.PROJECT_ID }}" \
+            --region="${{ env.REGION }}" \
+            --format="value(status.latestCreatedRevisionName)" 2>/dev/null || echo "N/A")
+
+          echo "- **URL**: $SERVICE_URL" >> $GITHUB_STEP_SUMMARY
+          echo "- **Latest Ready Revision**: $READY_REV" >> $GITHUB_STEP_SUMMARY
+          echo "- **Latest Created Revision**: $CREATED_REV" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Get error logs from latest revision
+          echo "### Recent Error Logs (last 200 lines)" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=${{ inputs.service }} AND severity>=ERROR" \
+            --project="${{ env.PROJECT_ID }}" \
+            --limit=200 \
+            --format="table(timestamp,severity,jsonPayload.message,textPayload)" \
+            2>&1 | head -100 >> $GITHUB_STEP_SUMMARY || echo "No error logs found"
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+          # Get all recent logs (INFO and above)
+          echo "### Recent All Logs (last 100 lines)" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=${{ inputs.service }}" \
+            --project="${{ env.PROJECT_ID }}" \
+            --limit=100 \
+            --format="table(timestamp,severity,jsonPayload.message,textPayload)" \
+            2>&1 | head -100 >> $GITHUB_STEP_SUMMARY || echo "No logs found"
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+          # Get revision details if exists
+          if [ "$CREATED_REV" != "N/A" ]; then
+            echo "### Revision Details" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            gcloud run revisions describe "$CREATED_REV" \
+              --project="${{ env.PROJECT_ID }}" \
+              --region="${{ env.REGION }}" \
+              --format="yaml(status.conditions)" 2>&1 || echo "Could not get revision details"
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Check Container Image Locally (if available)
+        continue-on-error: true
+        run: |
+          echo "### Container Image Check" >> $GITHUB_STEP_SUMMARY
+
+          # Try to get the image used by the service
+          IMAGE=$(gcloud run services describe ${{ inputs.service }} \
+            --project="${{ env.PROJECT_ID }}" \
+            --region="${{ env.REGION }}" \
+            --format="value(spec.template.spec.containers[0].image)" 2>/dev/null || echo "")
+
+          if [ -n "$IMAGE" ]; then
+            echo "- **Image**: $IMAGE" >> $GITHUB_STEP_SUMMARY
+
+            # Check if image exists in Artifact Registry
+            echo "Checking image in Artifact Registry..." >> $GITHUB_STEP_SUMMARY
+            gcloud artifacts docker images describe "$IMAGE" \
+              --format="yaml(image_summary)" 2>&1 | head -20 >> $GITHUB_STEP_SUMMARY || echo "Could not inspect image"
+          else
+            echo "- No image found" >> $GITHUB_STEP_SUMMARY
+          fi
