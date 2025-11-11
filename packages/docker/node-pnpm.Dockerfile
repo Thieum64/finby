@@ -29,8 +29,9 @@ RUN pnpm --filter "@hyperush/lib-otel" build || true
 RUN pnpm --filter @hyperush/$(basename ${SERVICE}) build || \
     pnpm --filter @hp/$(basename ${SERVICE}) build
 
-# Verify dist exists
-RUN test -f ${SERVICE}/dist/index.js || (echo "ERROR: ${SERVICE}/dist/index.js not found after build" && ls -la ${SERVICE}/ && exit 1)
+# Verify dist exists (accept either index.js or index.cjs)
+RUN test -f ${SERVICE}/dist/index.js || test -f ${SERVICE}/dist/index.cjs || \
+    (echo "ERROR: ${SERVICE}/dist/index.js or index.cjs not found after build" && ls -la ${SERVICE}/dist/ && exit 1)
 
 # Deploy stage - create standalone deployment with all dependencies
 FROM node:20-alpine AS deploy
@@ -93,11 +94,20 @@ RUN printf '#!/bin/sh\n' > /app/start.sh && \
     printf 'node -e "const keys=Object.keys(process.env).filter(k=>/^[A-Z][A-Z0-9_]*$/.test(k)&&!k.match(/KEY|SECRET|TOKEN|PASS/)).sort();console.log(keys.slice(0,30).join(\",\"))"\n' >> /app/start.sh && \
     printf 'echo ""\n' >> /app/start.sh && \
     printf 'echo "=== STARTING SERVICE ==="\n' >> /app/start.sh && \
-    printf 'exec node dist/index.js\n' >> /app/start.sh && \
+    printf 'if [ -f dist/index.js ]; then\n' >> /app/start.sh && \
+    printf '  exec node dist/index.js\n' >> /app/start.sh && \
+    printf 'elif [ -f dist/index.cjs ]; then\n' >> /app/start.sh && \
+    printf '  exec node dist/index.cjs\n' >> /app/start.sh && \
+    printf 'else\n' >> /app/start.sh && \
+    printf '  echo "ERROR: No dist/index.js or dist/index.cjs found"\n' >> /app/start.sh && \
+    printf '  ls -la dist/\n' >> /app/start.sh && \
+    printf '  exit 1\n' >> /app/start.sh && \
+    printf 'fi\n' >> /app/start.sh && \
     chmod +x /app/start.sh
 
-# Verify final structure
-RUN test -f ./dist/index.js || (echo "ERROR: dist/index.js not found in final image" && ls -laR . && exit 1)
+# Verify final structure (accept either index.js or index.cjs)
+RUN test -f ./dist/index.js || test -f ./dist/index.cjs || \
+    (echo "ERROR: dist/index.js or index.cjs not found in final image" && ls -laR ./dist && exit 1)
 
 EXPOSE 8080
 CMD ["/app/start.sh"]
