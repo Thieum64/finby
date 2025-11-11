@@ -50,15 +50,19 @@ WORKDIR /app
 RUN adduser -D service && chown service:service /app
 USER service
 
-# Copy production node_modules
-COPY --from=deps --chown=service:service /workspace/node_modules ./node_modules
-
-# Copy built artifacts from builder
-COPY --from=builder --chown=service:service /workspace/${SERVICE}/package.json ./package.json
-COPY --from=builder --chown=service:service /workspace/${SERVICE}/dist ./dist
-
-# Copy built packages (lib-otel, etc.)
+# Copy entire workspace from builder (includes all built packages and all dependencies)
+# This ensures workspace dependencies like @hyperush/lib-otel are available
+COPY --from=builder --chown=service:service /workspace/node_modules ./node_modules
 COPY --from=builder --chown=service:service /workspace/packages ./packages
+COPY --from=builder --chown=service:service /workspace/pnpm-workspace.yaml ./pnpm-workspace.yaml
+COPY --from=builder --chown=service:service /workspace/package.json ./package.json
+
+# Copy the specific service
+COPY --from=builder --chown=service:service /workspace/${SERVICE}/package.json ./service/package.json
+COPY --from=builder --chown=service:service /workspace/${SERVICE}/dist ./service/dist
+
+# Set working directory to service
+WORKDIR /app/service
 
 # Final verification
 RUN test -f ./dist/index.js || (echo "ERROR: dist/index.js not found in final image" && ls -la . && exit 1)
