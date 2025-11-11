@@ -157,7 +157,6 @@ resource "google_cloud_run_v2_service" "service" {
         content {
           http_get {
             path = var.probe_path
-            port = "http1"
           }
           period_seconds    = 2
           timeout_seconds   = 2
@@ -170,7 +169,6 @@ resource "google_cloud_run_v2_service" "service" {
         content {
           http_get {
             path = var.probe_path
-            port = "http1"
           }
           period_seconds    = 5
           timeout_seconds   = 2
