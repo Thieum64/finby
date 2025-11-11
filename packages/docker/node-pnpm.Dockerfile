@@ -12,7 +12,8 @@ RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 # Copy workspace files
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY packages ./packages
-COPY ${SERVICE} ${SERVICE}
+COPY ${SERVICE} ./apps/service
+COPY apps ./apps
 
 # Install all dependencies (including dev dependencies for build)
 RUN pnpm install --frozen-lockfile
@@ -24,10 +25,10 @@ RUN pnpm -r --filter "./packages/**" build || true
 RUN pnpm --filter @hyperush/$(basename ${SERVICE}) build
 
 # Verify dist exists
-RUN test -f ${SERVICE}/dist/index.js || (echo "ERROR: ${SERVICE}/dist/index.js not found after build" && ls -la ${SERVICE}/ && exit 1)
+RUN test -f apps/service/dist/index.js || (echo "ERROR: apps/service/dist/index.js not found after build" && ls -la apps/service/ && exit 1)
 
-# Production dependencies stage
-FROM node:20-alpine AS deps
+# Deploy stage - create standalone deployment with all dependencies
+FROM node:20-alpine AS deploy
 ARG SERVICE
 ENV NODE_ENV=production
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
@@ -35,11 +36,19 @@ WORKDIR /workspace
 
 RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 
+# Copy workspace files
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY packages ./packages
-COPY ${SERVICE} ${SERVICE}
+COPY ${SERVICE} ./apps/service
+COPY apps ./apps
 
-RUN pnpm install --prod --frozen-lockfile
+# Copy built artifacts from builder
+COPY --from=builder /workspace/packages/*/dist ./packages/*/dist
+COPY --from=builder /workspace/apps/service/dist ./apps/service/dist
+
+# Use pnpm deploy to create a standalone deployment
+# This resolves all workspace dependencies into node_modules
+RUN pnpm deploy --filter=@hyperush/$(basename ${SERVICE}) --prod /deploy
 
 # Runtime stage - minimal image with only what's needed to run
 FROM node:20-alpine AS runtime
@@ -50,22 +59,12 @@ WORKDIR /app
 RUN adduser -D service && chown service:service /app
 USER service
 
-# Copy entire workspace from builder (includes all built packages and all dependencies)
-# This ensures workspace dependencies like @hyperush/lib-otel are available
-COPY --from=builder --chown=service:service /workspace/node_modules ./node_modules
-COPY --from=builder --chown=service:service /workspace/packages ./packages
-COPY --from=builder --chown=service:service /workspace/pnpm-workspace.yaml ./pnpm-workspace.yaml
-COPY --from=builder --chown=service:service /workspace/package.json ./package.json
-
-# Copy the specific service
-COPY --from=builder --chown=service:service /workspace/${SERVICE}/package.json ./service/package.json
-COPY --from=builder --chown=service:service /workspace/${SERVICE}/dist ./service/dist
-
-# Set working directory to service
-WORKDIR /app/service
+# Copy the deployed service from deploy stage
+# This includes all dependencies properly resolved in node_modules
+COPY --from=deploy --chown=service:service /deploy ./
 
 # Final verification
-RUN test -f ./dist/index.js || (echo "ERROR: dist/index.js not found in final image" && ls -la . && exit 1)
+RUN test -f ./dist/index.js || (echo "ERROR: dist/index.js not found in final image" && ls -laR . && exit 1)
 
 EXPOSE 8080
-CMD ["node","dist/index.js"]
+CMD ["node", "dist/index.js"]
