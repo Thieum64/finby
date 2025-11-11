@@ -49,9 +49,10 @@ module "service" {
 
   env_vars = merge(
     {
-      NODE_ENV       = "development"
-      LOG_LEVEL      = "info"
-      GCP_PROJECT_ID = var.project_id
+      NODE_ENV             = "development"
+      LOG_LEVEL            = "info"
+      GCP_PROJECT_ID       = var.project_id
+      FIREBASE_PROJECT_ID  = var.project_id
     },
     var.env_vars
   )
