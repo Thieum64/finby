@@ -1,0 +1,88 @@
+name: Deploy Core Verify
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  REGION: ${{ vars.GCP_REGION || 'europe-west1' }}
+
+jobs:
+  deploy-worker:
+    name: Deploy Worker Subscriber
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+          access_token_scopes: https://www.googleapis.com/auth/cloud-platform
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        working-directory: infra/terraform/environments/dev
+        run: terraform init -lock-timeout=10m
+
+      - name: Terraform Plan (worker_subscriber only)
+        working-directory: infra/terraform/environments/dev
+        env:
+          TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
+          TF_VAR_region: ${{ env.REGION }}
+          TF_VAR_firebase_project_id: ${{ vars.FIREBASE_PROJECT_ID }}
+          TF_VAR_runtime_service_account: runtime-sa@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+          TF_VAR_worker_subscriber_image: ${{ vars.WORKER_SUBSCRIBER_IMAGE || 'us-docker.pkg.dev/cloudrun/container/hello' }}
+        run: terraform plan -target=module.worker_subscriber -out=worker-tfplan
+
+      - name: Terraform Apply (worker_subscriber only)
+        working-directory: infra/terraform/environments/dev
+        env:
+          TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
+          TF_VAR_region: ${{ env.REGION }}
+          TF_VAR_firebase_project_id: ${{ vars.FIREBASE_PROJECT_ID }}
+          TF_VAR_runtime_service_account: runtime-sa@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+          TF_VAR_worker_subscriber_image: ${{ vars.WORKER_SUBSCRIBER_IMAGE || 'us-docker.pkg.dev/cloudrun/container/hello' }}
+        run: terraform apply -auto-approve worker-tfplan
+
+      - name: Get Service Details
+        run: |
+          SERVICE_URL=$(gcloud run services describe worker-subscriber \
+            --project="${{ vars.GCP_PROJECT_ID }}" \
+            --region="${{ env.REGION }}" \
+            --format="value(status.url)")
+
+          REVISION=$(gcloud run services describe worker-subscriber \
+            --project="${{ vars.GCP_PROJECT_ID }}" \
+            --region="${{ env.REGION }}" \
+            --format="value(status.latestReadyRevisionName)")
+
+          echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
+          echo "REVISION=$REVISION" >> $GITHUB_ENV
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Deploy Core Infrastructure - Worker Subscriber" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Service**: worker-subscriber" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL**: ${SERVICE_URL:-Not available}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Latest Revision**: ${REVISION:-Not available}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Probe Path**: /health (configured via probe_path variable)" >> $GITHUB_STEP_SUMMARY
