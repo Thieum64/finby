@@ -66,7 +66,7 @@ jobs:
           echo "🔨 Building service image locally for smoke test..."
           docker build \
             -f packages/docker/service.Dockerfile \
-            --build-arg SERVICE=apps/${{ inputs.service }} \
+            --build-arg SERVICE=${{ inputs.service }} \
             --build-arg BASE_IMAGE=${{ env.BASE_IMAGE }} \
             -t smoketest:${{ github.sha }} \
             .
@@ -97,7 +97,7 @@ jobs:
                 - '-f'
                 - 'packages/docker/service.Dockerfile'
                 - '--build-arg'
-                - 'SERVICE=apps/${_SERVICE}'
+                - 'SERVICE=${_SERVICE}'
                 - '--build-arg'
                 - 'BASE_IMAGE=${_BASE_IMAGE}'
                 - '-t'

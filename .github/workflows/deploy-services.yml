@@ -112,7 +112,7 @@ jobs:
           echo "🔨 Building service image locally for smoke test..."
           docker build \
             -f packages/docker/service.Dockerfile \
-            --build-arg SERVICE=apps/${{ matrix.service }} \
+            --build-arg SERVICE=${{ matrix.service }} \
             --build-arg BASE_IMAGE=europe-west1-docker.pkg.dev/hyperush-dev-250930115246/services/base:latest \
             -t smoketest:${{ github.sha }}-${{ matrix.service }} \
             .
@@ -142,7 +142,7 @@ jobs:
                 - '-f'
                 - 'packages/docker/service.Dockerfile'
                 - '--build-arg'
-                - 'SERVICE=apps/${_SERVICE}'
+                - 'SERVICE=${_SERVICE}'
                 - '--build-arg'
                 - 'BASE_IMAGE=${_BASE_IMAGE}'
                 - '-t'

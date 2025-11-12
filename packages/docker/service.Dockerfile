@@ -10,6 +10,7 @@ ENV NODE_ENV=production
 
 # Copy service-specific files from base workspace
 # The base image already has everything built in /opt/workspace
+# SERVICE should be passed as the service name only (e.g. svc-authz), not apps/svc-authz
 COPY --chown=service:service /opt/workspace/apps/${SERVICE}/package.json ./package.json
 COPY --chown=service:service /opt/workspace/apps/${SERVICE}/dist ./dist
 COPY --chown=service:service /opt/workspace/node_modules ./node_modules
