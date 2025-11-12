@@ -109,7 +109,7 @@ jobs:
             - '${_IMAGE_SHA}'
             - '${_IMAGE_LATEST}'
           options:
-            machineType: 'E2_HIGHCPU_8'
+            machineType: 'N1_HIGHCPU_8'
             logging: CLOUD_LOGGING_ONLY
           EOF
 
