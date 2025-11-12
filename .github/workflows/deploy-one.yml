@@ -22,11 +22,17 @@ on:
 permissions:
   contents: read
   id-token: write
+  packages: write
+
+concurrency:
+  group: deploy-${{ inputs.service }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   REGISTRY: europe-west1-docker.pkg.dev
-  AR_REPO: services
+  PROJECT_ID: ${{ vars.GCP_PROJECT_ID || 'hyperush-dev-250930115246' }}
   REGION: ${{ vars.GCP_REGION || 'europe-west1' }}
+  BASE_IMAGE: europe-west1-docker.pkg.dev/hyperush-dev-250930115246/services/base:latest
 
 jobs:
   deploy:
@@ -37,35 +43,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 9.15.9
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build shared libraries
-        continue-on-error: true
-        run: pnpm -r --filter "./packages/**" build
-
-      - name: Build Service
-        run: pnpm --filter=@hyperush/${{ inputs.service }} build
-
-      - name: Preflight local docker build (no push)
-        continue-on-error: true
-        run: |
-          docker build \
-            -f packages/docker/node-pnpm.Dockerfile \
-            --build-arg SERVICE=apps/${{ inputs.service }} \
-            -t preflight:${{ inputs.service }} .
-
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
@@ -73,105 +50,104 @@ jobs:
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           create_credentials_file: true
           export_environment_variables: true
-          access_token_scopes: https://www.googleapis.com/auth/cloud-platform
 
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ vars.GCP_PROJECT_ID }}
 
       - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${{ env.REGISTRY }}
+        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
 
-      - name: BUILD AND PUSH CONTAINER IMAGE VIA CLOUD BUILD
-        working-directory: ${{ github.workspace }}
+      - name: Pull Base Image
+        run: docker pull ${{ env.BASE_IMAGE }}
+
+      - name: Local Smoke Test (BLOCKING)
+        id: smoke
         run: |
-          IMAGE_URI="${{ env.REGISTRY }}/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ inputs.service }}:${{ github.sha }}"
-          IMAGE_URI_LATEST="${{ env.REGISTRY }}/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ inputs.service }}:latest"
+          echo "🔨 Building service image locally for smoke test..."
+          docker build \
+            -f packages/docker/service.Dockerfile \
+            --build-arg SERVICE=apps/${{ inputs.service }} \
+            --build-arg BASE_IMAGE=${{ env.BASE_IMAGE }} \
+            -t smoketest:${{ github.sha }} \
+            .
 
-          # Create cloudbuild.yaml config file
-          cat > /tmp/cloudbuild.yaml << 'EOF'
-          steps:
-          - name: 'gcr.io/cloud-builders/docker'
-            args: ['build', '-f', 'packages/docker/node-pnpm.Dockerfile', '--build-arg', 'SERVICE=apps/${_SERVICE}', '-t', '${_IMAGE_SHA}', '-t', '${_IMAGE_LATEST}', '.']
-          images:
-          - '${_IMAGE_SHA}'
-          - '${_IMAGE_LATEST}'
-          EOF
-
-          # Reset BUILD_ID env so subsequent steps don't reuse an old value
-          echo "BUILD_ID=" >> $GITHUB_ENV
-
-          # Submit build from workspace root with explicit config
-          echo "📋 Building from $GITHUB_WORKSPACE with Cloud Build..."
-          BUILD_ID=$(gcloud builds submit "$GITHUB_WORKSPACE" \
-            --project "${{ vars.GCP_PROJECT_ID }}" \
-            --region "$REGION" \
-            --config /tmp/cloudbuild.yaml \
-            --substitutions _SERVICE=${{ inputs.service }},_IMAGE_SHA=$IMAGE_URI,_IMAGE_LATEST=$IMAGE_URI_LATEST \
-            --async --format="value(id)")
-
-          echo "⏳ Build ID: $BUILD_ID - Waiting for completion..."
-          echo "BUILD_ID=$BUILD_ID" >> $GITHUB_ENV
-
-          # Wait for build completion
-          while true; do
-            STATUS=$(gcloud builds describe "$BUILD_ID" --region="$REGION" --format="value(status)")
-            echo "Build status: $STATUS"
-
-            if [ "$STATUS" = "SUCCESS" ]; then
-              echo "✅ Build completed successfully"
-              break
-            elif [ "$STATUS" = "FAILURE" ] || [ "$STATUS" = "TIMEOUT" ] || [ "$STATUS" = "CANCELLED" ]; then
-              echo "❌ Build failed with status: $STATUS"
-              exit 1
-            else
-              echo "⏳ Build still running..."
-              sleep 10
-            fi
-          done
-
-          # Get actual digest from Cloud Build results
-          DIGEST=$(gcloud builds describe "$BUILD_ID" --region="$REGION" --format="value(results.images[0].digest)")
-          if [ -z "$DIGEST" ]; then
-            DIGEST=$(gcloud builds describe "$BUILD_ID" --region="$REGION" --format="value(results.images[1].digest)")
-          fi
-          if [ -z "$DIGEST" ]; then
-            echo "❌ Failed to get digest from build results"
+          echo "🧪 Running smoke test..."
+          chmod +x scripts/smoke.sh
+          if ./scripts/smoke.sh smoketest:${{ github.sha }}; then
+            echo "✅ SMOKE TEST PASSED"
+          else
+            echo "❌ SMOKE TEST FAILED - Container failed to start or respond to /healthz"
+            echo "smoke_passed=false" >> $GITHUB_OUTPUT
             exit 1
           fi
+          echo "smoke_passed=true" >> $GITHUB_OUTPUT
 
-          # Construct image URIs
-          IMAGE_URI_SHA="${{ env.REGISTRY }}/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ inputs.service }}:${{ github.sha }}"
-          IMAGE_URI_LATEST="${{ env.REGISTRY }}/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ inputs.service }}:latest"
-          IMAGE_URI_DIGEST="${{ env.REGISTRY }}/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ inputs.service }}@${DIGEST}"
-
-          echo "📦 Image URIs:"
-          echo "  SHA: $IMAGE_URI_SHA"
-          echo "  Latest: $IMAGE_URI_LATEST"
-          echo "  Digest: $IMAGE_URI_DIGEST"
-
-          # Export to environment
-          echo "IMAGE_URI_SHA=$IMAGE_URI_SHA" >> $GITHUB_ENV
-          echo "IMAGE_URI_LATEST=$IMAGE_URI_LATEST" >> $GITHUB_ENV
-          echo "IMAGE_URI_DIGEST=$IMAGE_URI_DIGEST" >> $GITHUB_ENV
-          echo "IMAGE_DIGEST=$DIGEST" >> $GITHUB_ENV
-
-      - name: Dump Cloud Build details
-        if: always()
-        env:
-          BUILD_ID: ${{ env.BUILD_ID }}
+      - name: Build and Push Service Image via Cloud Build
+        if: steps.smoke.outputs.smoke_passed == 'true'
+        id: build
         run: |
-          if [ -z "$BUILD_ID" ]; then
-            echo "No BUILD_ID captured."
-            exit 0
-          fi
-          echo "Build ID: $BUILD_ID"
-          gcloud builds describe "$BUILD_ID" --region "$REGION" --format='value(status,statusDetail,logUrl)'
-          echo "----- tail of Cloud Build logs -----"
-          gcloud builds log "$BUILD_ID" --region "$REGION" | tail -n 300 || true
+          IMAGE_SHA="${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/services/${{ inputs.service }}:${{ github.sha }}"
+          IMAGE_LATEST="${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/services/${{ inputs.service }}:latest"
 
-      - name: Setup Terraform for Service
+          cat > /tmp/cloudbuild.yaml <<'EOF'
+          steps:
+            - name: 'gcr.io/cloud-builders/docker'
+              args:
+                - 'build'
+                - '-f'
+                - 'packages/docker/service.Dockerfile'
+                - '--build-arg'
+                - 'SERVICE=apps/${_SERVICE}'
+                - '--build-arg'
+                - 'BASE_IMAGE=${_BASE_IMAGE}'
+                - '-t'
+                - '${_IMAGE_SHA}'
+                - '-t'
+                - '${_IMAGE_LATEST}'
+                - '.'
+          images:
+            - '${_IMAGE_SHA}'
+            - '${_IMAGE_LATEST}'
+          options:
+            machineType: 'E2_HIGHCPU_8'
+            logging: CLOUD_LOGGING_ONLY
+          EOF
+
+          echo "📦 Submitting Cloud Build..."
+          BUILD_ID=$(gcloud builds submit . \
+            --region=${{ env.REGION }} \
+            --config=/tmp/cloudbuild.yaml \
+            --substitutions=_SERVICE=${{ inputs.service }},_IMAGE_SHA="${IMAGE_SHA}",_IMAGE_LATEST="${IMAGE_LATEST}",_BASE_IMAGE="${{ env.BASE_IMAGE }}" \
+            --format="value(id)")
+
+          echo "BUILD_ID=$BUILD_ID" >> $GITHUB_ENV
+          echo "⏳ Build ID: $BUILD_ID"
+
+          # Wait for build (max 10min)
+          timeout=600
+          elapsed=0
+          while [ $elapsed -lt $timeout ]; do
+            STATUS=$(gcloud builds describe "$BUILD_ID" --region=${{ env.REGION }} --format="value(status)")
+            if [ "$STATUS" = "SUCCESS" ]; then
+              echo "✅ Build SUCCESS"
+              break
+            elif [ "$STATUS" = "FAILURE" ] || [ "$STATUS" = "TIMEOUT" ] || [ "$STATUS" = "CANCELLED" ]; then
+              echo "❌ Build FAILED: $STATUS"
+              gcloud builds log "$BUILD_ID" --region=${{ env.REGION }} | tail -100
+              exit 1
+            fi
+            sleep 10
+            elapsed=$((elapsed + 10))
+          done
+
+          # Get digest
+          DIGEST=$(gcloud builds describe "$BUILD_ID" --region=${{ env.REGION }} --format="value(results.images[0].digest)")
+          IMAGE_DIGEST="${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/services/${{ inputs.service }}@${DIGEST}"
+
+          echo "IMAGE_URI_DIGEST=$IMAGE_DIGEST" >> $GITHUB_ENV
+          echo "📦 Image: $IMAGE_DIGEST"
+
+      - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_wrapper: false
@@ -179,59 +155,47 @@ jobs:
       - name: Deploy Service with Terraform
         working-directory: infra/terraform/services/${{ inputs.service }}
         env:
-          TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
-          TF_VAR_region: ${{ vars.GCP_REGION || 'europe-west1' }}
-          TF_VAR_runtime_service_account: runtime-sa@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+          TF_VAR_project_id: ${{ env.PROJECT_ID }}
+          TF_VAR_region: ${{ env.REGION }}
+          TF_VAR_runtime_service_account: runtime-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
           TF_VAR_image: ${{ env.IMAGE_URI_DIGEST }}
         run: |
           terraform init -lock-timeout=10m
           terraform plan -lock-timeout=10m -out=service-tfplan
           terraform apply -auto-approve -lock-timeout=10m service-tfplan
 
-      - name: Idempotence Check
+      - name: Get Service URL
         working-directory: infra/terraform/services/${{ inputs.service }}
-        env:
-          TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
-          TF_VAR_region: ${{ vars.GCP_REGION || 'europe-west1' }}
-          TF_VAR_runtime_service_account: runtime-sa@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
-          TF_VAR_image: ${{ env.IMAGE_URI_DIGEST }}
         run: |
-          echo "🔍 Checking idempotence - should show 0 changes"
-          terraform plan -lock-timeout=10m -detailed-exitcode
-          if [ $? -eq 0 ]; then
-            echo "✅ Idempotence verified - no changes needed"
+          SERVICE_URL=$(terraform output -raw service_url 2>/dev/null || echo "")
+          if [ -z "$SERVICE_URL" ]; then
+            SERVICE_URL=$(gcloud run services describe ${{ inputs.service }} \
+              --region=${{ env.REGION }} \
+              --format="value(status.url)")
+          fi
+          echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
+          echo "🌐 Service URL: $SERVICE_URL"
+
+      - name: Health Check (Single Attempt)
+        run: |
+          echo "🏥 Health checking ${{ env.SERVICE_URL }}/healthz"
+          if curl -fsS "${{ env.SERVICE_URL }}/healthz" --max-time 10; then
+            echo "✅ Health check PASSED"
           else
-            echo "❌ Idempotence failed - infrastructure drift detected"
+            echo "❌ Health check FAILED"
+            echo "Checking Cloud Run service status..."
+            gcloud run services describe ${{ inputs.service }} \
+              --region=${{ env.REGION }} \
+              --format="yaml(status.conditions)"
             exit 1
           fi
-
-      - name: Get Service URL and Health Check
-        working-directory: infra/terraform/services/${{ inputs.service }}
-        run: |
-          SERVICE_URL=$(terraform output -raw service_url)
-          echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
-
-          # Health check with 30 retries
-          echo "🏥 Health checking ${{ inputs.service }} at $SERVICE_URL/healthz"
-          for i in {1..30}; do
-            if curl -fsS "$SERVICE_URL/healthz" --max-time 10; then
-              echo ""
-              echo "✅ Health check passed for ${{ inputs.service }}"
-              exit 0
-            fi
-            echo "Health check attempt $i/30 failed, retrying in 10s..."
-            sleep 10
-          done
-
-          echo "❌ Health check failed for ${{ inputs.service }} after 30 attempts"
-          exit 1
 
       - name: Summary
         if: always()
         run: |
-          echo "## 🚀 Deployment Summary for ${{ inputs.service }}" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Service**: ${{ inputs.service }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **URL**: ${SERVICE_URL:-Not available}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Image Digest**: ${IMAGE_DIGEST:-Not available}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Build ID**: ${BUILD_ID:-Not available}" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL**: ${{ env.SERVICE_URL }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image**: ${{ env.IMAGE_URI_DIGEST }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Build ID**: ${{ env.BUILD_ID }}" >> $GITHUB_STEP_SUMMARY
