@@ -222,8 +222,8 @@ jobs:
 
       - name: Health Check (Single Attempt)
         run: |
-          echo "🏥 Health checking ${{ env.SERVICE_URL }}/healthz"
-          if curl -fsS "${{ env.SERVICE_URL }}/healthz" --max-time 10; then
+          echo "🏥 Health checking ${{ env.SERVICE_URL }}/health"
+          if curl -fsS "${{ env.SERVICE_URL }}/health" --max-time 10; then
             echo "✅ Health check PASSED"
           else
             echo "❌ Health check FAILED"
