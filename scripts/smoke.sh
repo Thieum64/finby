@@ -20,7 +20,7 @@ cleanup() {
 }
 
 echo "🔍 Smoke testing: $IMG"
-CID=$(docker run -d -e PORT=8080 -e NODE_ENV=production -e ENABLE_OTEL=false -p 18080:8080 "$IMG")
+CID=$(docker run -d -e PORT=8080 -e NODE_ENV=production -e ENABLE_OTEL=false -e FIREBASE_PROJECT_ID=hyperush-dev-250930115246 -p 18080:8080 "$IMG")
 echo "✓ Container started: $CID"
 
 echo "⏳ Waiting 8s for service to start..."
