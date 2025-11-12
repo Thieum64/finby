@@ -73,7 +73,6 @@ jobs:
             - '${_BASE_IMAGE}:${_TAG}'
             - '${_BASE_IMAGE}:latest'
           options:
-            machineType: 'N1_HIGHCPU_8'
             logging: CLOUD_LOGGING_ONLY
           EOF
 
