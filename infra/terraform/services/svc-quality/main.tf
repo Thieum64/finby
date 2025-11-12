@@ -52,6 +52,9 @@ module "service" {
       NODE_ENV       = "development"
       LOG_LEVEL      = "info"
       GCP_PROJECT_ID = var.project_id
+      FIREBASE_PROJECT_ID  = var.project_id
+      SERVICE_VERSION      = "1.0.0"
+      ENABLE_OTEL          = "false"
     },
     var.env_vars
   )
