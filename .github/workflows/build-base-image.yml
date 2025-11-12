@@ -1,0 +1,90 @@
+name: Build Base Image
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'package.json'
+      - 'packages/**'
+      - 'apps/**'
+      - 'packages/docker/base.Dockerfile'
+
+permissions:
+  contents: read
+  id-token: write
+  packages: write
+
+concurrency:
+  group: build-base-image-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: europe-west1-docker.pkg.dev
+  PROJECT_ID: hyperush-dev-250930115246
+  REGION: europe-west1
+
+jobs:
+  build-push-base:
+    runs-on: ubuntu-latest
+    outputs:
+      base_image: ${{ steps.build.outputs.base_image }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+
+      - name: Build and Push Base Image
+        id: build
+        run: |
+          IMAGE_TAG="${{ github.sha }}"
+          BASE_IMAGE="${{ env.REGISTRY }}/${{ env.PROJECT_ID }}/services/base"
+
+          echo "🏗️  Building base image..."
+          cat > /tmp/cloudbuild.yaml <<'EOF'
+          steps:
+            - name: 'gcr.io/cloud-builders/docker'
+              args:
+                - 'build'
+                - '-f'
+                - 'packages/docker/base.Dockerfile'
+                - '-t'
+                - '${_BASE_IMAGE}:${_TAG}'
+                - '-t'
+                - '${_BASE_IMAGE}:latest'
+                - '.'
+          images:
+            - '${_BASE_IMAGE}:${_TAG}'
+            - '${_BASE_IMAGE}:latest'
+          options:
+            machineType: 'E2_HIGHCPU_8'
+            logging: CLOUD_LOGGING_ONLY
+          EOF
+
+          gcloud builds submit \
+            --region=${{ env.REGION }} \
+            --config=/tmp/cloudbuild.yaml \
+            --substitutions=_BASE_IMAGE="${BASE_IMAGE}",_TAG="${IMAGE_TAG}" \
+            --quiet \
+            .
+
+          echo "✅ Base image built and pushed"
+          echo "base_image=${BASE_IMAGE}:${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          echo "📦 Base image: ${BASE_IMAGE}:${IMAGE_TAG}"
+          echo "📦 Base image: ${BASE_IMAGE}:latest"
