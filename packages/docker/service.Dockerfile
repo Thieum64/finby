@@ -9,11 +9,11 @@ ARG SERVICE
 ENV NODE_ENV=production
 
 # Copy service-specific files from base workspace
-# The base image already has everything built, we just need to expose it
-COPY --from=0 --chown=service:service /opt/workspace/apps/${SERVICE}/package.json ./package.json
-COPY --from=0 --chown=service:service /opt/workspace/apps/${SERVICE}/dist ./dist
-COPY --from=0 --chown=service:service /opt/workspace/node_modules ./node_modules
-COPY --from=0 --chown=service:service /opt/workspace/packages ./packages
+# The base image already has everything built in /opt/workspace
+COPY --chown=service:service /opt/workspace/apps/${SERVICE}/package.json ./package.json
+COPY --chown=service:service /opt/workspace/apps/${SERVICE}/dist ./dist
+COPY --chown=service:service /opt/workspace/node_modules ./node_modules
+COPY --chown=service:service /opt/workspace/packages ./packages
 
 # Create boot diagnostics wrapper
 RUN printf '#!/bin/sh\n\
