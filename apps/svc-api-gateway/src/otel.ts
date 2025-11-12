@@ -15,6 +15,14 @@ export function initOTel(serviceName: string): void {
     return;
   }
 
+  // Don't initialize if ENABLE_OTEL is explicitly set to false
+  if (process.env.ENABLE_OTEL === 'false') {
+    console.info(
+      `OpenTelemetry disabled via ENABLE_OTEL=false for service: ${serviceName}`
+    );
+    return;
+  }
+
   // Don't initialize in test environment
   if (process.env.NODE_ENV === 'test') {
     console.info(
